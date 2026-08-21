@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "transfer-attack"
+version = "0.1.0"
+description = "OSFD and MI-FGSM-baseline transfer attacks against object detectors (mmdet 3.x)."
+requires-python = ">=3.10"
+# Intentionally no dependency pins here: torch/torchvision/mmengine/mmcv/mmdet/pycocotools/etc.
+# are already installed with exact, mutually-compatible versions by setup_env.sh (steps 3-9)
+# before `pip install -e .` runs (step 11). Re-declaring them here risks pip's resolver
+# touching already-correctly-pinned packages.
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["transfer_attack*"]
