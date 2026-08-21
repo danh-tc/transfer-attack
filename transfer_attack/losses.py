@@ -49,6 +49,11 @@ def build_gt_data_sample(gt_boxes_canvas: Tensor, gt_labels: Tensor, canvas: int
             ori_shape=(canvas, canvas),
             scale_factor=(1.0, 1.0),
             batch_input_shape=(canvas, canvas),
+            # anchor-based heads' loss_by_feat -> get_anchors -> valid_flags
+            # reads this (only on the .loss() path, not .predict()); our canvas
+            # has no extra padding beyond itself, so it's (canvas, canvas, 3)
+            # matching mmdet's usual (h, w, c) Pad-transform convention.
+            pad_shape=(canvas, canvas, 3),
         )
     )
     return ds

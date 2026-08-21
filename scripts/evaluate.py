@@ -17,6 +17,7 @@ import argparse
 import csv
 import json
 import sys
+import time
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -65,17 +66,22 @@ def get_clean_predictions(handle, spec, image_ids, coco, img_dir, canvas, predic
     from transfer_attack.io_utils import load_predictions, save_predictions
 
     clean_path = predictions_dir / "clean" / f"{spec.name}.json"
+    preds = {}
     if clean_path.exists() and not force_clean:
         preds = load_predictions(clean_path)
-        logger.info(f"  clean predictions loaded from cache ({len(preds)} images)")
-        return preds
 
-    preds = {}
-    for image_id in image_ids:
-        canvas_img, _, _, _ = load_canvas_image(img_dir, coco, image_id, canvas)
-        preds[image_id] = predict_canvas(handle, canvas_img, canvas, device=device)
-    save_predictions(clean_path, preds)
-    logger.info(f"  clean predictions computed + cached ({len(preds)} images)")
+    # Cache is keyed only by model name, not by manifest/limit -- a cache built
+    # for a smaller image set (e.g. a smoke test) would otherwise silently miss
+    # ids for a later, larger run. Recompute + merge only what's missing.
+    missing = [i for i in image_ids if i not in preds]
+    if missing:
+        for image_id in missing:
+            canvas_img, _, _, _ = load_canvas_image(img_dir, coco, image_id, canvas)
+            preds[image_id] = predict_canvas(handle, canvas_img, canvas, device=device)
+        save_predictions(clean_path, preds)
+        logger.info(f"  clean predictions: {len(missing)} computed + cached, {len(preds) - len(missing)} from cache")
+    else:
+        logger.info(f"  clean predictions loaded from cache ({len(image_ids)} images)")
     return preds
 
 
@@ -85,15 +91,19 @@ def get_adv_predictions(handle, spec, attack, image_ids, coco, img_dir, canvas, 
     from transfer_attack.io_utils import load_noise, load_predictions, save_predictions
 
     pred_path = predictions_dir / attack / f"{spec.name}.json"
+    preds = {}
     if pred_path.exists():
         preds = load_predictions(pred_path)
-        logger.info(f"  [{attack}] adversarial predictions loaded from cache")
-        return preds
 
+    # As with clean predictions: cache is keyed only by model+attack, not by
+    # manifest/limit. Only recompute ids this run actually needs and that
+    # aren't already cached; ids with no crafted noise stay permanently absent
+    # (craft.py skipped them, e.g. 0 valid GT boxes) rather than being retried.
     attack_noise_dir = noise_dir / attack
-    preds = {}
+    to_compute = [i for i in image_ids if i not in preds]
     n_missing = 0
-    for image_id in image_ids:
+    n_computed = 0
+    for image_id in to_compute:
         noise_path = attack_noise_dir / f"{image_id}.pt"
         if not noise_path.exists():
             n_missing += 1
@@ -101,10 +111,15 @@ def get_adv_predictions(handle, spec, attack, image_ids, coco, img_dir, canvas, 
         canvas_img, _, _, _ = load_canvas_image(img_dir, coco, image_id, canvas)
         x_adv = (canvas_img + load_noise(noise_path)).clamp(0.0, 255.0)
         preds[image_id] = predict_canvas(handle, x_adv, canvas, device=device)
+        n_computed += 1
     if n_missing:
         logger.warning(f"  [{attack}] {n_missing} images had no crafted noise -- skipped")
-    save_predictions(pred_path, preds)
-    logger.info(f"  [{attack}] adversarial predictions computed + cached ({len(preds)} images)")
+    if n_computed:
+        save_predictions(pred_path, preds)
+    logger.info(
+        f"  [{attack}] adversarial predictions: {n_computed} computed + cached, "
+        f"{len(preds) - n_computed} from cache ({len(preds)} total)"
+    )
     return preds
 
 
@@ -212,7 +227,7 @@ def main() -> None:
 
     from transfer_attack.constants import COCO_ANN_FILE
     from transfer_attack.data import load_coco, load_manifest
-    from transfer_attack.io_utils import get_logger
+    from transfer_attack.io_utils import get_logger, save_run_log
     from transfer_attack.models import MODEL_REGISTRY
 
     logger = get_logger()
@@ -229,12 +244,37 @@ def main() -> None:
     img_dir = args.data_dir / "val2017"
     gt_cache = build_gt_cache(coco, image_ids, img_dir, args.canvas)
 
+    t0 = time.time()
     rows = []
     for spec in MODEL_REGISTRY:
         rows.extend(evaluate_one_model(spec, args, coco, image_ids, img_dir, gt_cache, logger))
+    elapsed_total = time.time() - t0
 
     write_outputs(rows, args.out, args.out_json)
     logger.info(f"wrote {args.out} and {args.out_json}")
+
+    run_log_path = save_run_log(
+        PROJECT_DIR / "runs",
+        "evaluate",
+        f"{'-'.join(args.attacks)}_{args.manifest.stem}",
+        {
+            "manifest": str(args.manifest),
+            "attacks": args.attacks,
+            "noise_dir": str(args.noise_dir),
+            "checkpoints_dir": str(args.checkpoints_dir),
+            "canvas": args.canvas,
+            "score_thr": args.score_thr,
+            "iou_thr": args.iou_thr,
+            "device": args.device,
+            "limit": args.limit,
+            "results": {
+                "n_images_in_manifest": len(image_ids),
+                "elapsed_sec": round(elapsed_total, 1),
+                "rows": rows,
+            },
+        },
+    )
+    logger.info(f"run log written -> {run_log_path}")
 
 
 if __name__ == "__main__":

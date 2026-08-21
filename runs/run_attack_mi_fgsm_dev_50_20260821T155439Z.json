@@ -1,0 +1,186 @@
+{
+  "timestamp": "20260821T155439Z",
+  "attack": "mi_fgsm",
+  "manifest": "data/manifests/dev_50.json",
+  "seed": 42,
+  "limit": null,
+  "score_thr": 0.3,
+  "iou_thr": 0.5,
+  "config": {
+    "attack_type": "mi_fgsm",
+    "epsilon": 5.0,
+    "alpha": 1.0,
+    "steps": 100,
+    "mu": 1.0,
+    "k": 3.0,
+    "theta": 7.0,
+    "l_s": 10,
+    "rho": 0.8,
+    "s_max": 1.1,
+    "sigma": 6.0,
+    "canvas": 800
+  },
+  "results": {
+    "n_images_in_manifest": 50,
+    "n_crafted": 49,
+    "n_skipped": 1,
+    "craft_elapsed_sec": 491.4,
+    "eval_elapsed_sec": 99.6,
+    "rows": [
+      {
+        "attack": "clean",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": null,
+        "mAP_adv": 0.46097786859304013,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6466427802355922,
+        "ASR": ""
+      },
+      {
+        "attack": "mi_fgsm",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": 0.46111803103228965,
+        "mAP_adv": 2.847389307740661e-07,
+        "mAP_drop_pct": 99.9999382503152,
+        "AP50_clean": 0.6468442846160859,
+        "AP50_adv": 9.499630701856465e-07,
+        "ASR": 99.54954954954955
+      },
+      {
+        "attack": "clean",
+        "model_name": "fcos_r50",
+        "group": "A",
+        "mAP_clean": null,
+        "mAP_adv": 0.4530156990922468,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6506289583554119,
+        "ASR": ""
+      },
+      {
+        "attack": "mi_fgsm",
+        "model_name": "fcos_r50",
+        "group": "A",
+        "mAP_clean": 0.45311362567440844,
+        "mAP_adv": 0.11748864140711342,
+        "mAP_drop_pct": 74.07082136798583,
+        "AP50_clean": 0.6506571731594177,
+        "AP50_adv": 0.19579287306266044,
+        "ASR": 60.49382716049383
+      },
+      {
+        "attack": "clean",
+        "model_name": "deformable_detr",
+        "group": "A",
+        "mAP_clean": null,
+        "mAP_adv": 0.5065718593202134,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.662753169041417,
+        "ASR": ""
+      },
+      {
+        "attack": "mi_fgsm",
+        "model_name": "deformable_detr",
+        "group": "A",
+        "mAP_clean": 0.5149739853336832,
+        "mAP_adv": 0.005135919389551002,
+        "mAP_drop_pct": 99.00268372076637,
+        "AP50_clean": 0.6721664299378228,
+        "AP50_adv": 0.008950204442133316,
+        "ASR": 93.47826086956522
+      },
+      {
+        "attack": "clean",
+        "model_name": "yolov3_d53",
+        "group": "B",
+        "mAP_clean": null,
+        "mAP_adv": 0.4410603911948681,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6626365756424715,
+        "ASR": ""
+      },
+      {
+        "attack": "mi_fgsm",
+        "model_name": "yolov3_d53",
+        "group": "B",
+        "mAP_clean": 0.44106736515194267,
+        "mAP_adv": 0.27144646042115933,
+        "mAP_drop_pct": 38.45691568505661,
+        "AP50_clean": 0.6627046595292537,
+        "AP50_adv": 0.47045905485113737,
+        "ASR": 32.85024154589372
+      },
+      {
+        "attack": "clean",
+        "model_name": "yolox_l",
+        "group": "B",
+        "mAP_clean": null,
+        "mAP_adv": 0.6066672889075309,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.7536132371169095,
+        "ASR": ""
+      },
+      {
+        "attack": "mi_fgsm",
+        "model_name": "yolox_l",
+        "group": "B",
+        "mAP_clean": 0.606776627539028,
+        "mAP_adv": 0.4399215973640187,
+        "mAP_drop_pct": 27.498592167556275,
+        "AP50_clean": 0.7538362173941427,
+        "AP50_adv": 0.5986816166972951,
+        "ASR": 16.733067729083665
+      },
+      {
+        "attack": "clean",
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "mAP_clean": null,
+        "mAP_adv": 0.5051939156402773,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6952117967689594,
+        "ASR": ""
+      },
+      {
+        "attack": "mi_fgsm",
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "mAP_clean": 0.5052464205306577,
+        "mAP_adv": 0.41118930996187614,
+        "mAP_drop_pct": 18.61608647716769,
+        "AP50_clean": 0.6956621223023829,
+        "AP50_adv": 0.5835822683376672,
+        "ASR": 20.24793388429752
+      },
+      {
+        "attack": "clean",
+        "model_name": "dino_swin_l",
+        "group": "C",
+        "mAP_clean": null,
+        "mAP_adv": 0.6547295097119504,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.7997678692661004,
+        "ASR": ""
+      },
+      {
+        "attack": "mi_fgsm",
+        "model_name": "dino_swin_l",
+        "group": "C",
+        "mAP_clean": 0.6547611143402164,
+        "mAP_adv": 0.5858476276520206,
+        "mAP_drop_pct": 10.52498158166249,
+        "AP50_clean": 0.7997962685980867,
+        "AP50_adv": 0.7334109631843649,
+        "ASR": 11.55378486055777
+      }
+    ]
+  }
+}

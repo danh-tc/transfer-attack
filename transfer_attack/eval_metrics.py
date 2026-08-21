@@ -167,7 +167,18 @@ def predict_canvas(handle: ModelHandle, x_canvas: Tensor, canvas: int, device: s
 
     x_norm = handle.normalize(x_canvas.unsqueeze(0).to(device))
     ds = DetDataSample()
-    ds.set_metainfo(dict(img_shape=(canvas, canvas), ori_shape=(canvas, canvas), scale_factor=(1.0, 1.0)))
+    ds.set_metainfo(
+        dict(
+            img_shape=(canvas, canvas),
+            ori_shape=(canvas, canvas),
+            scale_factor=(1.0, 1.0),
+            # DETR-family detectors (deformable_detr, dino_*) read this off
+            # batch_data_samples[0] to build the transformer padding mask;
+            # non-DETR detectors ignore it. Our canvas is already a fixed
+            # padded square, so it's just (canvas, canvas).
+            batch_input_shape=(canvas, canvas),
+        )
+    )
     out = handle.model.predict(x_norm, [ds], rescale=True)[0]
     inst = out.pred_instances
     labels = inst.labels.cpu()

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
@@ -17,6 +18,25 @@ def get_logger(name: str = "transfer_attack") -> logging.Logger:
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
     return logger
+
+
+def save_run_log(runs_dir: Path, run_type: str, tag: str, payload: dict) -> Path:
+    """Write one JSON log per invocation of craft.py/evaluate.py under `runs_dir`
+    (repo-tracked, unlike results/ and logs/ which hold large regenerable
+    artifacts and are gitignored). `payload` should carry the full config used
+    plus a compact result summary -- NOT bulky per-image tensors/predictions,
+    those stay under results/.
+
+    File name: {run_type}_{tag}_{UTC timestamp}.json, e.g.
+    craft_osfd_20260821T150352Z.json -- timestamp makes repeated runs additive
+    (each run gets its own log entry) rather than overwriting history.
+    """
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    path = runs_dir / f"{run_type}_{tag}_{timestamp}.json"
+    with open(path, "w") as f:
+        json.dump({"timestamp": timestamp, **payload}, f, indent=2)
+    return path
 
 
 def save_noise(path: Path, noise: Tensor) -> None:

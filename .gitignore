@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+evasion-venv/
+
+# Downloaded model checkpoints (fetched by setup_env.sh)
+checkpoints/
+
+# Downloaded dataset (fetched by setup_env.sh); keep generated manifests
+data/coco/
+
+# Run outputs
+logs/
+results/
+
+# Editor/OS
+.DS_Store

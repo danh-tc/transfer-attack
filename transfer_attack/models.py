@@ -154,7 +154,14 @@ def build_model_handle(
     cat_id_to_label: dict[int, int] = {}
     label_to_cat_id: dict[int, int] = {}
     if coco is not None:
-        cat_ids = coco.getCatIds(catNms=list(classes))
+        # Some older mmdetection model-zoo checkpoints (pre-3.x) carry legacy
+        # class names with underscores in place of spaces for multi-word COCO
+        # categories (e.g. "traffic_light" vs. the COCO JSON's "traffic light").
+        # pycocotools.getCatIds() does exact string matching, so normalize before
+        # looking up -- verified this preserves label order (it's a naming quirk,
+        # not a class-set/order mismatch).
+        query_names = [c.replace("_", " ") for c in classes]
+        cat_ids = coco.getCatIds(catNms=query_names)
         if len(cat_ids) != len(classes):
             raise RuntimeError(
                 f"{spec.name}: expected {len(classes)} category ids from COCO for "
