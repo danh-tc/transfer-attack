@@ -136,7 +136,7 @@ torchvision==0.16.2+cu121
 tornado==6.5.8
 tqdm==4.70.0
 traitlets==5.16.1
--e git+https://github.com/danh-tc/transfer-attack.git@2f86e04f75160ce6cc70440da1876293858d504c#egg=transfer_attack
+-e git+https://github.com/danh-tc/transfer-attack.git@82c5a15c6eae8b6840410d90f5775c2c4ee3da27#egg=transfer_attack
 triton==2.1.0
 typing_extensions==4.16.0
 tzdata==2026.3

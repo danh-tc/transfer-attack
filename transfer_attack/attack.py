@@ -33,6 +33,7 @@ class AttackConfig:
     steps: int = STEPS
     mu: float = MU              # MI momentum decay, used by both attacks
     k: float = K                 # OSFD only
+    use_rrb: bool = True          # OSFD only -- False: single-view feature loss, no augmentation (E3 factorial)
     theta: float = THETA          # RRB, OSFD only
     l_s: int = L_S
     rho: float = RHO
@@ -85,7 +86,10 @@ def craft_one_image(
         x_adv = torch.clamp(x_clean + noise, 0.0, 255.0)
 
         if cfg.attack_type == "osfd":
-            aug = rrb_forward(x_adv.unsqueeze(0), gt_boxes, cfg)  # (2,3,H,W)
+            # RRB on: 2 augmented views (rotate-only, rotate+resize), both blurred (rrb_forward).
+            # RRB off (E3 factorial): single un-augmented view -- osfd_loss still works unchanged,
+            # it just sums over 1 group instead of 2.
+            aug = rrb_forward(x_adv.unsqueeze(0), gt_boxes, cfg) if cfg.use_rrb else x_adv.unsqueeze(0)
             feats_adv = model.backbone(handle.normalize(aug))
             loss = osfd_loss(feats_cln, feats_adv, cfg.k)
         else:

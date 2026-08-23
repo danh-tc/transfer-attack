@@ -1,0 +1,46 @@
+{
+  "timestamp": "20260823T160502Z",
+  "attack": "n6a_rrb_cr_k3",
+  "manifest": "data/manifests/dev_50.json",
+  "seed": 42,
+  "n_images": 2,
+  "config": {
+    "attack_type": "osfd",
+    "epsilon": 5.0,
+    "alpha": 1.0,
+    "steps": 5,
+    "mu": 1.0,
+    "k": 3.0,
+    "use_rrb": true,
+    "theta": 7.0,
+    "l_s": 10,
+    "rho": 0.8,
+    "s_max": 1.1,
+    "sigma": 6.0,
+    "canvas": 800
+  },
+  "diagnostics": {
+    "conflict_pixel_ratio": 0.4543437391519547,
+    "correction_ratio": 0.00011483641393580864,
+    "cos_cr_avg": 0.9999999880790711
+  },
+  "results": {
+    "n_images_used": 2,
+    "n_crafted": 2,
+    "n_skipped": 0,
+    "craft_elapsed_sec": 6.2,
+    "rows": [
+      {
+        "attack": "n6a_rrb_cr_k3",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": 0.5839603960396039,
+        "mAP_adv": 0.194546204620462,
+        "mAP_drop_pct": 66.68503447496326,
+        "AP50_clean": 0.700990099009901,
+        "AP50_adv": 0.3421617161716171,
+        "ASR": 83.33333333333333
+      }
+    ]
+  }
+}
