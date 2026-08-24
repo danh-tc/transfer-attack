@@ -1,0 +1,80 @@
+{
+  "timestamp": "20260824T144648Z",
+  "attack": "n6a_rrb_cr_k3",
+  "manifest": "data/manifests/dev_50.json",
+  "seed": 42,
+  "n_images": 20,
+  "config": {
+    "attack_type": "osfd",
+    "epsilon": 5.0,
+    "alpha": 1.0,
+    "steps": 100,
+    "mu": 1.0,
+    "k": 3.0,
+    "use_rrb": true,
+    "theta": 7.0,
+    "l_s": 10,
+    "rho": 0.8,
+    "s_max": 1.1,
+    "sigma": 6.0,
+    "canvas": 800
+  },
+  "diagnostics": {
+    "conflict_pixel_ratio": 0.4952238235473633,
+    "conflict_view_ratio": 0.30890135739743707,
+    "correction_ratio": 0.0001309786573992543,
+    "cos_cr_avg": 0.999999971985817
+  },
+  "results": {
+    "n_images_used": 20,
+    "n_crafted": 20,
+    "n_skipped": 0,
+    "craft_elapsed_sec": 1028.4,
+    "rows": [
+      {
+        "attack": "n6a_rrb_cr_k3",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": 0.4519042128251141,
+        "mAP_adv": 0.0,
+        "mAP_drop_pct": 100.0,
+        "AP50_clean": 0.6061884567795166,
+        "AP50_adv": 0.0,
+        "ASR": 100.0
+      },
+      {
+        "attack": "n6a_rrb_cr_k3",
+        "model_name": "yolox_l",
+        "group": "B",
+        "mAP_clean": 0.5781513289279621,
+        "mAP_adv": 0.060740520912953726,
+        "mAP_drop_pct": 89.49400998081559,
+        "AP50_clean": 0.6989404561674081,
+        "AP50_adv": 0.12928728397775538,
+        "ASR": 85.14851485148515
+      },
+      {
+        "attack": "n6a_rrb_cr_k3",
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "mAP_clean": 0.48154317213496634,
+        "mAP_adv": 0.11156337051253241,
+        "mAP_drop_pct": 76.83211454999854,
+        "AP50_clean": 0.6336718132997277,
+        "AP50_adv": 0.18500117842706265,
+        "ASR": 84.5360824742268
+      },
+      {
+        "attack": "n6a_rrb_cr_k3",
+        "model_name": "dino_swin_l",
+        "group": "C",
+        "mAP_clean": 0.6613419273716868,
+        "mAP_adv": 0.4479059345193922,
+        "mAP_drop_pct": 32.27316823848362,
+        "AP50_clean": 0.8038810814214362,
+        "AP50_adv": 0.5635671914791498,
+        "ASR": 34.0
+      }
+    ]
+  }
+}

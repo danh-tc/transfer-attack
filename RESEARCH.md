@@ -654,6 +654,174 @@ external evidence 2026, (4) chưa thấy OD work giải đúng bottleneck optimi
 theo: đặc tả conflict-resolution rule tối giản (control `AVG vs conflict-resolved`, không thêm
 hyperparameter lớn) — chưa code.
 
+**N6-A v0 pilot — NO-GO.** Script `scripts/n6a_gcr_pilot.py`, kết quả
+`results/n6a_gcr_pilot_summary.csv`, log `runs/run_attack_osfd_n6a_*`. Mechanism: per pixel,
+chiếu bỏ phần gradient của mỗi view (trong K=3 draw RRB/step) *xung đột* (dot<0) với
+leave-one-out consensus của K-1 view còn lại (PCGrad-style), rồi lấy trung bình — so với
+`rrb_avg_k3` (K=3 naive average, cùng budget) và `osfd_k1` (K=1, reference). `rrb_avg_k3`/
+`rrb_cr_k3` crafted **lockstep** (chia sẻ RNG snapshot quanh mỗi K=3 draw để cùng tham số
+augmentation ngẫu nhiên, loại bỏ confound "AVG gặp may hơn CR"). N=20, 100 step, ASR:
+
+| model | group | osfd_k1 | rrb_avg_k3 | rrb_cr_k3 | CR−AVG |
+|---|---|---|---|---|---|
+| faster_rcnn_r50 (surrogate) | — | 100.0 | 100.0 | 100.0 | +0.0 |
+| yolox_l | B | 84.2 | 86.1 | 85.1 | −1.0 |
+| mask_rcnn_swin_t | C | 82.5 | 82.5 | 84.5 | +2.1 |
+| dino_swin_l | C | 31.0 | 34.0 | 34.0 | +0.0 |
+
+GO criterion đã pre-register (CR−AVG ≥+3 trên ≥2/3 của {yolox_l, mask_rcnn_swin_t,
+dino_swin_l}, không target nào giảm >3 điểm) — đạt **0/3**.
+
+Diagnostics giải thích cơ chế NO-GO (không phải "unclear", mà falsify có cơ sở):
+`conflict_pixel_ratio=0.495` (gần một nửa pixel có ít nhất 1 view dot<0 với leave-one-out
+consensus — conflict hình học tồn tại thật) nhưng `correction_ratio=0.00013` (phần gradient bị
+chiếu bỏ nhỏ không đáng kể so với norm gốc) và `cos_cr_avg≈0.9999999998` (hướng gradient sau
+resolve gần như trùng khít hướng trung bình thô). → Conflict theo định nghĩa `dot<0` xảy ra phổ
+biến về mặt hình học, nhưng biên độ phần bị coi là "xung đột" quá nhỏ để việc chiếu bỏ nó đổi
+được `sign(gradient)` — thứ duy nhất update rule (I-FGSM/MI) thực sự dùng. Đây là bằng chứng
+khá vững cho việc bác bỏ đúng hypothesis N6-A ở dạng v0 này (per-pixel leave-one-out
+sign-conflict projection), không phải do bug hay chưa đủ mạnh.
+
+**Kết luận N6-A v0**: đóng, NO-GO. Không tiếp tục tune (không có hyperparameter lớn để tune —
+`eta` chỉ là numerical guard, đúng như thiết kế ban đầu). **Quyết định: bỏ hẳn N6-A v1**
+(sign-conflict) — lý do: conflict theo raw dot-product đã falsify khá sạch rằng conflict không
+đủ biên độ để matter; đổi định nghĩa sang `sign(gradient)` có nguy cơ "ép" conflict trở nên quan
+trọng bằng định nghĩa mới thay vì theo đúng bằng chứng hình học vừa đo được, và hướng
+sign-disagreement còn quá gần cơ chế RCG (disagreement → xử lý update) đã NO-GO ở Phase M.
+Chuyển hẳn sang **N6-B trước, N6-C sau** (xem §16-B).
+
+### N6-B0: Path-integrated gradient diagnostic (rẻ, trước khi pilot)
+
+Motivation: MIG (Ma et al., ICCV 2023) và MuMoDIG (AAAI 2025) báo cáo path/integrated gradient
+ổn định hơn instantaneous gradient giữa CNN và ViT cho classification transfer. Điều này khớp
+đúng 2 finding đã có của project theo hai cách khác nhau: E3b (cosine/norm gradient tức thời
+không giải thích synergy RRB×k) và N6-A (local RRB conflict tồn tại nhiều về mặt hình học nhưng
+biên độ correction vô nghĩa) — cả hai đều gợi ý **gradient tại một điểm không phải nơi chứa tín
+hiệu transfer hữu ích; có thể là gradient tích hợp dọc theo một path mới là nơi đó**. Trước khi
+code lại toàn bộ craft loop theo path-gradient (rủi ro lặp lại đúng bài học N6-A: code full pilot
+rồi mới phát hiện operator gần như không đổi gì), chạy diagnostic rẻ trước, đúng kỷ luật đã dùng
+suốt Phase M/N.
+
+**Thiết kế** (script `scripts/n6b0_path_gradient_diagnostic.py`, không craft lại — tái dùng noise
+`n6a_osfd_k1` đã có, tức OSFD chuẩn K=1/RRB-on/100-step/epsilon=5, làm `delta_t`):
+
+- `g_local = ∇_δ L_OSFD(x+δ_t)` — gradient tức thời tại state đã crafted (không cần tính riêng,
+  chính là điểm cuối `λ=1` của path).
+- `g_path = mean_{m=1..M} ∇_δ L_OSFD(x+λ_m·δ_t)`, `λ_m=m/M`, `M=10` — right-Riemann-sum path
+  average từ gần 0 đến 1, bao gồm cả điểm `λ=1` (=`g_local`).
+- Mọi `λ_m` dùng chung 1 RNG snapshot cho `rrb_forward` (lockstep, giống n6a) — cô lập hiệu ứng
+  scale-theo-λ khỏi randomness của augmentation.
+- Đo 1 (rẻ): `cos(g_path, g_local)` + tỷ lệ đồng dấu — trả lời "path-averaging có thực sự tạo
+  gradient khác biệt hay không" trước khi tốn gì thêm.
+- Đo 2 (quan trọng hơn): one-step controlled probe — từ `x_t=clamp(x+δ_t,0,255)`, đi thêm đúng 1
+  step `alpha·sign(g_local)` vs `alpha·sign(g_path)`, đo incremental evasion (dùng đúng
+  `compute_asr_for_image`/định nghĩa ASR chuẩn của cả project) trên `yolox_l`/`mask_rcnn_swin_t`/
+  `dino_swin_l` so với `x_t` một mình. **Sai khác có chủ đích so với budget attack thật**: probe
+  step chỉ clamp về `[0,255]` pixel-range, KHÔNG re-clamp về epsilon-ball — vì N4b đã đo ~86%
+  pixel của noise 100-step/epsilon=5 đã bão hòa ở biên; nếu re-clamp về đúng epsilon, local và
+  path sẽ hội tụ về gần như cùng kết quả bất kể hướng nào tốt hơn (đúng confound đã hạ DOB-v0).
+
+**Kết quả** (N=20, M=10, `dev_50`):
+
+- `avg cos(g_path, g_local) = 0.699`, `avg sign_agree_ratio = 0.817` — **path-averaging tạo
+  gradient khác biệt thật sự** (không phải no-op như correction của N6-A, vốn có cos≈0.9999999998).
+
+| model | group | ASR(x_t) | ASR(local) | ASR(path) | incr_local | incr_path | path−local |
+|---|---|---|---|---|---|---|---|
+| faster_rcnn_r50 (surrogate) | — | 100.0 | 100.0 | 100.0 | +0.0 | +0.0 | +0.0 |
+| yolox_l | B | 84.2 | 90.1 | 90.1 | +5.9 | +5.9 | +0.0 |
+| mask_rcnn_swin_t | C | 82.5 | 84.5 | 87.6 | +2.1 | +5.2 | **+3.1** |
+| dino_swin_l | C | 31.0 | 35.0 | 39.0 | +4.0 | +8.0 | **+4.0** |
+
+**Đọc kết quả**: surrogate đã bão hòa ASR=100% nên không có "chỗ" để phân biệt (kỳ vọng, không
+phải vấn đề). Trên `yolox_l`, local và path đạt đúng cùng mức incremental (+5.9) — hai hướng có
+vẻ đã chạm cùng một "trần" easy-to-evade ở model này, không phải path kém hơn. Trên **2/3 hard
+target** — đúng `mask_rcnn_swin_t` và `dino_swin_l`, hai model nhóm C mà project đang nhắm tới —
+path direction cho incremental evasion cao hơn rõ rệt so với local (+3.1 và +4.0 điểm), và mức
+tăng tuyệt đối lớn nhất rơi đúng vào `dino_swin_l` — target khó transfer nhất trong toàn bộ
+project.
+
+**Verdict: GO signal cho N6-B** (không phải NO-GO như N6-A/DOB/RCG/MVC/STAT-NORM). Cả hai điều
+kiện đã đặt trước khi chạy đều đạt: (1) `cos(g_path,g_local)` khác 1 rõ rệt (0.699, không phải
+≈1), xác nhận path-averaging tạo ra thứ mới thật sự chứ không phải no-op; (2) path direction cho
+incremental evasion cao hơn local trên ≥2/3 hard target ({yolox_l, mask_rcnn_swin_t, dino_swin_l})
+— đạt 2/3, target còn lại (yolox_l) hòa chứ không âm. Đây là finding dương thứ hai của project sau
+N4/N4b, và là finding dương **đầu tiên** trực tiếp support một phương hướng craft-loop mới (khác
+N4/N4b — vốn dẫn tới DOB, đã NO-GO).
+
+**Bước tiếp theo (chưa làm)**: thiết kế N6-B pilot thật — path-integrated gradient OSFD attack
+đầy đủ 100-step, so với OSFD chuẩn cùng budget, N=20 rồi N=300 nếu dương. Cần quyết định thêm:
+cách tích hợp path-averaging vào MỖI step của vòng lặp 100-step (M=10 forward/backward mỗi step
+sẽ đắt hơn hẳn — cần cân nhắc M nhỏ hơn hoặc amortize), và path nên tính dọc theo state nào (từ
+`0` đến state-tại-step-hiện-tại, hay một window ngắn hơn) — chưa chốt.
+
+### N6-B v0 pilot: full path-averaged OSFD attack — **GO**
+
+Quyết định trước khi code (không sweep sau khi thấy kết quả): path tính từ **clean → current
+state** (không dùng local window quanh `x+δ_t` — window sẽ đổi hẳn hypothesis sang
+"local-neighborhood smoothing", chồng lấn VMI-FGSM/flatness, thứ project đã chủ động parked ở
+N2-C), **M=3 pre-registered, không sweep nếu fail**. Script `scripts/n6b_path_pilot.py`, kết quả
+`results/n6b_path_pilot_summary.csv`, log `runs/run_attack_osfd_n6b_*`.
+
+Mechanism mỗi step `t` (giữ nguyên epsilon/alpha/mu/k/RRB so với OSFD chuẩn, chỉ đổi cách tính
+gradient ascent):
+
+```
+λ_m = m/M,  m=1..M=3
+g_m       = ∇_δ L_OSFD(x + λ_m·δ_t)
+g_path,t  = mean_m g_m
+m_t       = μ·m_{t-1} + g_path,t / mean|g_path,t|
+δ_{t+1}   = Π_ε(δ_t + α·sign(m_t))
+```
+
+`osfd_local` dùng đúng update rule này với chỉ term `m=M` (λ=1) — chính là OSFD chuẩn đã dùng
+xuyên suốt project. Hai trajectory crafted **lockstep** (share RNG snapshot mỗi step, giống
+n6a_gcr_pilot.py) để loại bỏ confound "path gặp may hơn local". Diagnostic `cos(g_path, g_m=M)` +
+sign-disagree lấy "miễn phí" từ chính M draw của path (term `m=M` đã là gradient tức thời tại
+đúng điểm đó, không cần forward/backward thêm).
+
+**Kết quả** (N=20, 100 step, ASR %):
+
+| model | group | osfd_local | path_m3 | path−local |
+|---|---|---|---|---|
+| faster_rcnn_r50 (surrogate) | — | 100.0 | 98.9 | −1.1 |
+| yolox_l | B | 86.1 | 87.1 | +1.0 |
+| mask_rcnn_swin_t | C | 82.5 | 85.6 | **+3.1** |
+| dino_swin_l | C | 31.0 | 42.0 | **+11.0** |
+
+GO criterion đã pre-register (path−local ≥+3 trên ≥2/3 của {yolox_l, mask_rcnn_swin_t,
+dino_swin_l}, không target nào giảm >3 điểm): **đạt 2/3** (mask_rcnn_swin_t +3.1, dino_swin_l
++11.0), `yolox_l` dương nhẹ (+1.0) chứ không âm, surrogate chỉ giảm nhẹ (−1.1, trong biên).
+`dino_swin_l` +11.0 vượt xa ngưỡng "+5 đáng chú ý" đã đặt trước — đây là mức tăng ASR lớn nhất
+trên `dino_swin_l` trong toàn bộ project tính đến hiện tại.
+
+Diagnostic theo step (mean over 20 ảnh) trả lời đúng câu hỏi "effect có chỉ ở early-stage không":
+
+| step | cos(g_path, g_local-tại-cùng-điểm) | sign_disagree |
+|---|---|---|
+| 1 | 0.983 | 0.049 |
+| 25 | 0.834 | 0.134 |
+| 50 | 0.811 | 0.140 |
+| 75 | 0.802 | 0.143 |
+| 100 | 0.798 | 0.144 |
+
+Cosine giảm dần rồi ổn định quanh **~0.80** từ step 25 trở đi, KHÔNG trôi ngược về 1 —
+path-averaging tiếp tục tạo gradient khác biệt **xuyên suốt cả trajectory**, không phải hiệu ứng
+chỉ mạnh lúc đầu rồi biến mất. Đây là bằng chứng cho một mechanism thật, bền vững theo thời gian,
+không phải nhiễu early-step.
+
+**Verdict: GO.** Đây là finding dương mạnh nhất của project tính đến hiện tại — vượt rõ mọi
+candidate trước đó (MVC/RCG/STAT-NORM/DOB đều NO-GO; N6-A NO-GO; ngay cả RCG-AVG, kết quả dương
+nhất trước đây, chỉ đạt +11.0 trên DINO nhờ mở rộng K=3-draw/step chứ không phải mechanism mới —
+còn ở đây gain đến từ path-averaging thật, một trục hoàn toàn khác K-draw). Path-integrated OSFD
+gradient (M=3, clean→current) là **candidate mạnh nhất hiện tại của project**.
+
+**Bước tiếp theo (chưa làm)**: xác nhận N=20 không phải may mắn do sample nhỏ — chạy lại trên
+`dev_300` (N lớn hơn, có thể cần giảm cost bằng cách không log diagnostic mỗi step); nếu vẫn giữ
+gain, xác nhận held-out trên `val_100` theo đúng quy trình đã định ở §17. Cân nhắc thêm: pilot
+non-hard targets (fcos_r50, deformable_detr, yolov3_d53 — nhóm A/B còn thiếu) để xác nhận không
+đánh đổi hiệu quả ở nhóm dễ transfer.
+
 ## 17. Trạng thái / bước tiếp theo
 
 - [x] Environment + checkpoint + COCO val2017 + manifest đã setup xong (`setup_env.sh`).
@@ -709,8 +877,31 @@ hyperparameter lớn) — chưa code.
       resolution, ưu tiên #1, bám đúng finding RRB≫no-RRB và K=3-AVG>K=1 chưa bị NO-GO),
       N6-B (integrated/path gradient cho OSFD, ưu tiên #2), N6-C (cross-layer relational
       feature distortion, ưu tiên #3, cần diagnostic trước khi code).
-- [ ] **(Ưu tiên chính)** N6-A — đặc tả conflict-resolution rule tối giản (control
-      `AVG vs conflict-resolved`, không thêm hyperparameter lớn). Chưa chốt cơ chế, chưa code.
+- [x] **N6-A v0 pilot — đã chạy, NO-GO, đóng hẳn (không làm v1)** (xem §16): per-pixel
+      leave-one-out gradient-conflict projection (PCGrad-style) trên K=3 RRB view không vượt
+      naive averaging (0/3 hard target đạt ngưỡng +3). Diagnostics cho thấy lý do: conflict hình
+      học phổ biến (`conflict_pixel_ratio=0.495`) nhưng biên độ phần bị chiếu bỏ quá nhỏ
+      (`correction_ratio=0.00013`, `cos_cr_avg≈1`) để đổi được `sign(gradient)` mà update rule
+      thực sự dùng. Quyết định bỏ v1 (sign-conflict): tránh "ép" conflict quan trọng bằng định
+      nghĩa mới trái ngược bằng chứng hình học, và tránh lặp lại cơ chế RCG (disagreement→xử lý
+      update) đã NO-GO.
+- [x] **N6-B0 path-gradient diagnostic — đã chạy, GO signal** (xem §16): path-integrated OSFD
+      gradient (M=10, right-Riemann trên noise `n6a_osfd_k1` có sẵn, không craft lại) khác biệt
+      thật với gradient tức thời (`cos=0.699`, không phải no-op), và one-step probe theo hướng
+      path cho incremental evasion cao hơn local trên 2/3 hard target (`mask_rcnn_swin_t` +3.1,
+      `dino_swin_l` +4.0; `yolox_l` hòa +0.0). Finding dương thứ hai của project, đầu tiên hỗ trợ
+      trực tiếp một craft-loop mới.
+- [x] **N6-B v0 pilot — đã chạy, GO** (xem §16): path-averaged OSFD gradient (M=3 pre-registered,
+      clean→current, lockstep pairing với osfd_local) đạt GO criterion (path−local ≥+3 trên 2/3
+      hard target: `mask_rcnn_swin_t` +3.1, `dino_swin_l` +11.0; `yolox_l` +1.0 không âm; không
+      target nào giảm >3 điểm). Diagnostic `cos(g_path,g_local)` ổn định ~0.80 xuyên suốt 100
+      step (không trôi về 1) — mechanism bền vững, không phải hiệu ứng early-stage. **Candidate
+      mạnh nhất của project tính đến hiện tại.**
+- [ ] **(Ưu tiên chính)** Xác nhận N6-B trên `dev_300` (N lớn hơn) rồi held-out `val_100` theo
+      đúng quy trình đã định. Cân nhắc thêm pilot trên nhóm A/B còn thiếu (fcos_r50,
+      deformable_detr, yolov3_d53) để xác nhận không đánh đổi hiệu quả ở nhóm dễ transfer.
+- [ ] N6-C (cross-layer relational feature distortion) hạ xuống phương án dự phòng — chỉ quay
+      lại nếu N6-B không giữ được gain ở `dev_300`/`val_100`.
 - [ ] Sau khi có ứng viên tốt nhất: chạy full 200 step trên `dev_300` để confirm không
       phải nhiễu do sample size nhỏ.
 - [ ] Xác nhận held-out trên `val_100` cho phương pháp thắng cuộc (chỉ làm khi

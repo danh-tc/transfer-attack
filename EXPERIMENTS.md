@@ -1,7 +1,7 @@
 <!-- TỰ SINH bởi scripts/gen_experiment_log.py từ runs/*.json. Không sửa tay. -->
 # Nhật ký thực nghiệm
 
-22 run được log trong `runs/`. Xem [RESEARCH.md](RESEARCH.md) để biết mục tiêu/metric/dataset.
+33 run được log trong `runs/`. Xem [RESEARCH.md](RESEARCH.md) để biết mục tiêu/metric/dataset.
 
 ## Tổng hợp
 
@@ -29,8 +29,166 @@
 | 20260823T154306Z | run_attack | n5b_osfd | dev_50.json | 100 | 20/0 | 64.2% | 59.3% | `runs/run_attack_osfd_n5b_osfd_dev_50_n20_20260823T154306Z.json` |
 | 20260823T154639Z | run_attack | n5b_dob_easy_v1 | dev_50.json | 100 | 20/0 | 64.2% | 62.3% | `runs/run_attack_osfd_n5b_dob_easy_v1_dev_50_n20_20260823T154639Z.json` |
 | 20260823T155013Z | run_attack | n5b_dob_hard_v1 | dev_50.json | 100 | 20/0 | 63.5% | 61.2% | `runs/run_attack_osfd_n5b_dob_hard_v1_dev_50_n20_20260823T155013Z.json` |
+| 20260823T160459Z | run_attack | n6a_osfd_k1 | dev_50.json | 5 | 2/0 | — | — | `runs/run_attack_osfd_n6a_osfd_k1_dev_50_n2_20260823T160459Z.json` |
+| 20260823T160501Z | run_attack | n6a_rrb_avg_k3 | dev_50.json | 5 | 2/0 | — | — | `runs/run_attack_osfd_n6a_rrb_avg_k3_dev_50_n2_20260823T160501Z.json` |
+| 20260823T160502Z | run_attack | n6a_rrb_cr_k3 | dev_50.json | 5 | 2/0 | — | — | `runs/run_attack_osfd_n6a_rrb_cr_k3_dev_50_n2_20260823T160502Z.json` |
+| 20260823T160943Z | run_attack | n6a_osfd_k1 | dev_50.json | 5 | 2/0 | — | — | `runs/run_attack_osfd_n6a_osfd_k1_dev_50_n2_20260823T160943Z.json` |
+| 20260823T160944Z | run_attack | n6a_rrb_avg_k3 | dev_50.json | 5 | 2/0 | — | — | `runs/run_attack_osfd_n6a_rrb_avg_k3_dev_50_n2_20260823T160944Z.json` |
+| 20260823T160945Z | run_attack | n6a_rrb_cr_k3 | dev_50.json | 5 | 2/0 | — | — | `runs/run_attack_osfd_n6a_rrb_cr_k3_dev_50_n2_20260823T160945Z.json` |
+| 20260824T144540Z | run_attack | n6a_osfd_k1 | dev_50.json | 100 | 20/0 | 65.9% | 60.1% | `runs/run_attack_osfd_n6a_osfd_k1_dev_50_n20_20260824T144540Z.json` |
+| 20260824T144614Z | run_attack | n6a_rrb_avg_k3 | dev_50.json | 100 | 20/0 | 67.5% | 65.6% | `runs/run_attack_osfd_n6a_rrb_avg_k3_dev_50_n20_20260824T144614Z.json` |
+| 20260824T144648Z | run_attack | n6a_rrb_cr_k3 | dev_50.json | 100 | 20/0 | 67.9% | 66.2% | `runs/run_attack_osfd_n6a_rrb_cr_k3_dev_50_n20_20260824T144648Z.json` |
+| 20260824T152203Z | run_attack | n6b_osfd_local | dev_50.json | 100 | 20/0 | 66.5% | 63.2% | `runs/run_attack_osfd_n6b_osfd_local_dev_50_n20_20260824T152203Z.json` |
+| 20260824T152236Z | run_attack | n6b_path_m3 | dev_50.json | 100 | 20/0 | 71.6% | 70.3% | `runs/run_attack_osfd_n6b_path_m3_dev_50_n20_20260824T152236Z.json` |
 
 ## Chi tiết từng run
+
+### 20260824T152236Z — `run_attack_osfd_n6b_path_m3_dev_50_n20_20260824T152236Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6b_path_m3`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=100, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800, m_lambda=3
+- crafted=20 skipped=0 craft=568.2s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6b_path_m3 | faster_rcnn_r50 | — | 0.4519 | 0.0000 | 100.0% | 0.6062 | 0.0000 | 98.9% |
+| n6b_path_m3 | yolox_l | B | 0.5782 | 0.0493 | 91.5% | 0.6989 | 0.1088 | 87.1% |
+| n6b_path_m3 | mask_rcnn_swin_t | C | 0.4815 | 0.0813 | 83.1% | 0.6337 | 0.1332 | 85.6% |
+| n6b_path_m3 | dino_swin_l | C | 0.6613 | 0.4215 | 36.3% | 0.8039 | 0.5772 | 42.0% |
+
+### 20260824T152203Z — `run_attack_osfd_n6b_osfd_local_dev_50_n20_20260824T152203Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6b_osfd_local`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=100, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800, m_lambda=3
+- crafted=20 skipped=0 craft=568.2s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6b_osfd_local | faster_rcnn_r50 | — | 0.4519 | 0.0002 | 100.0% | 0.6062 | 0.0004 | 100.0% |
+| n6b_osfd_local | yolox_l | B | 0.5782 | 0.1093 | 81.1% | 0.6989 | 0.1776 | 86.1% |
+| n6b_osfd_local | mask_rcnn_swin_t | C | 0.4815 | 0.0894 | 81.4% | 0.6337 | 0.1461 | 82.5% |
+| n6b_osfd_local | dino_swin_l | C | 0.6613 | 0.4818 | 27.2% | 0.8039 | 0.6307 | 31.0% |
+
+### 20260824T144648Z — `run_attack_osfd_n6a_rrb_cr_k3_dev_50_n20_20260824T144648Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6a_rrb_cr_k3`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=100, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800
+- crafted=20 skipped=0 craft=1028.4s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6a_rrb_cr_k3 | faster_rcnn_r50 | — | 0.4519 | 0.0000 | 100.0% | 0.6062 | 0.0000 | 100.0% |
+| n6a_rrb_cr_k3 | yolox_l | B | 0.5782 | 0.0607 | 89.5% | 0.6989 | 0.1293 | 85.1% |
+| n6a_rrb_cr_k3 | mask_rcnn_swin_t | C | 0.4815 | 0.1116 | 76.8% | 0.6337 | 0.1850 | 84.5% |
+| n6a_rrb_cr_k3 | dino_swin_l | C | 0.6613 | 0.4479 | 32.3% | 0.8039 | 0.5636 | 34.0% |
+
+### 20260824T144614Z — `run_attack_osfd_n6a_rrb_avg_k3_dev_50_n20_20260824T144614Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6a_rrb_avg_k3`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=100, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800
+- crafted=20 skipped=0 craft=1028.4s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6a_rrb_avg_k3 | faster_rcnn_r50 | — | 0.4519 | 0.0000 | 100.0% | 0.6062 | 0.0000 | 100.0% |
+| n6a_rrb_avg_k3 | yolox_l | B | 0.5782 | 0.0563 | 90.3% | 0.6989 | 0.1114 | 86.1% |
+| n6a_rrb_avg_k3 | mask_rcnn_swin_t | C | 0.4815 | 0.1206 | 75.0% | 0.6337 | 0.2008 | 82.5% |
+| n6a_rrb_avg_k3 | dino_swin_l | C | 0.6613 | 0.4517 | 31.7% | 0.8039 | 0.5783 | 34.0% |
+
+### 20260824T144540Z — `run_attack_osfd_n6a_osfd_k1_dev_50_n20_20260824T144540Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6a_osfd_k1`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=100, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800
+- crafted=20 skipped=0 craft=1028.4s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6a_osfd_k1 | faster_rcnn_r50 | — | 0.4519 | 0.0002 | 99.9% | 0.6062 | 0.0005 | 100.0% |
+| n6a_osfd_k1 | yolox_l | B | 0.5782 | 0.1240 | 78.6% | 0.6989 | 0.1947 | 84.2% |
+| n6a_osfd_k1 | mask_rcnn_swin_t | C | 0.4815 | 0.1213 | 74.8% | 0.6337 | 0.1844 | 82.5% |
+| n6a_osfd_k1 | dino_swin_l | C | 0.6613 | 0.4833 | 26.9% | 0.8039 | 0.6046 | 31.0% |
+
+### 20260823T160945Z — `run_attack_osfd_n6a_rrb_cr_k3_dev_50_n2_20260823T160945Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6a_rrb_cr_k3`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=5, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800
+- crafted=2 skipped=0 craft=6.0s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6a_rrb_cr_k3 | faster_rcnn_r50 | — | 0.5840 | 0.1945 | 66.7% | 0.7010 | 0.3422 | 83.3% |
+
+### 20260823T160944Z — `run_attack_osfd_n6a_rrb_avg_k3_dev_50_n2_20260823T160944Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6a_rrb_avg_k3`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=5, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800
+- crafted=2 skipped=0 craft=6.0s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6a_rrb_avg_k3 | faster_rcnn_r50 | — | 0.5840 | 0.1945 | 66.7% | 0.7010 | 0.3422 | 83.3% |
+
+### 20260823T160943Z — `run_attack_osfd_n6a_osfd_k1_dev_50_n2_20260823T160943Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6a_osfd_k1`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=5, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800
+- crafted=2 skipped=0 craft=6.0s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6a_osfd_k1 | faster_rcnn_r50 | — | 0.5840 | 0.4210 | 27.9% | 0.7010 | 0.5683 | 50.0% |
+
+### 20260823T160502Z — `run_attack_osfd_n6a_rrb_cr_k3_dev_50_n2_20260823T160502Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6a_rrb_cr_k3`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=5, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800
+- crafted=2 skipped=0 craft=6.2s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6a_rrb_cr_k3 | faster_rcnn_r50 | — | 0.5840 | 0.1945 | 66.7% | 0.7010 | 0.3422 | 83.3% |
+
+### 20260823T160501Z — `run_attack_osfd_n6a_rrb_avg_k3_dev_50_n2_20260823T160501Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6a_rrb_avg_k3`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=5, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800
+- crafted=2 skipped=0 craft=6.2s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6a_rrb_avg_k3 | faster_rcnn_r50 | — | 0.5840 | 0.1945 | 66.7% | 0.7010 | 0.3422 | 83.3% |
+
+### 20260823T160459Z — `run_attack_osfd_n6a_osfd_k1_dev_50_n2_20260823T160459Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_50.json`
+- attack: `n6a_osfd_k1`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=5, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800
+- crafted=2 skipped=0 craft=6.2s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6a_osfd_k1 | faster_rcnn_r50 | — | 0.5840 | 0.4210 | 27.9% | 0.7010 | 0.5683 | 50.0% |
 
 ### 20260823T155013Z — `run_attack_osfd_n5b_dob_hard_v1_dev_50_n20_20260823T155013Z.json`
 
