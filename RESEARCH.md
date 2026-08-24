@@ -822,6 +822,57 @@ gain, xác nhận held-out trên `val_100` theo đúng quy trình đã định �
 non-hard targets (fcos_r50, deformable_detr, yolov3_d53 — nhóm A/B còn thiếu) để xác nhận không
 đánh đổi hiệu quả ở nhóm dễ transfer.
 
+### N6-B v0 xác nhận trên `dev_300` — **CONFIRMED CANDIDATE**
+
+Chạy lại đúng nguyên v0 (không đổi hyperparameter nào — cùng `osfd_local` vs `path_m3`, 100
+step, cùng epsilon/alpha/mu/RRB, M=3, path clean→current), N=300 (`data/manifests/dev_300.json`),
+mở rộng eval full 7 model (thêm `fcos_r50`, `deformable_detr`, `yolov3_d53` so với pilot N=20),
+cộng **paired image-cluster bootstrap 95% CI** (2000 draw, resample ảnh — cùng convention với N4)
+cho `ASR(path_m3) − ASR(osfd_local)`. Cùng script `scripts/n6b_path_pilot.py`, log
+`runs/run_attack_osfd_n6b_*_dev_300_*`.
+
+Tiêu chí xác nhận đã pre-register trước khi chạy: DINO gain vẫn ≥+5 ASR; Mask-Swin vẫn ≥+3 hoặc
+ít nhất dương ổn định; không model nào giảm >3; surrogate drop nhỏ chấp nhận được; và — điều
+kiện quyết định coi là "confirmed" thay vì "chỉ pilot" — CI của DINO không được cắt 0.
+
+**Kết quả (N=300, ASR %, kèm 95% bootstrap CI cho delta)**:
+
+| model | group | osfd_local | path_m3 | path−local | 95% CI | same_side_frac |
+|---|---|---|---|---|---|---|
+| faster_rcnn_r50 (surrogate) | — | 99.2 | 98.8 | −0.3 | [−0.8, +0.1] | 0.92 |
+| deformable_detr | A | 98.5 | 98.0 | −0.5 | [−1.1, +0.0] | 0.96 |
+| fcos_r50 | A | 98.1 | 97.7 | −0.3 | [−1.0, +0.4] | 0.79 |
+| yolov3_d53 | B | 83.9 | 84.6 | +0.7 | [−0.3, +1.7] | 0.93 |
+| yolox_l | B | 69.2 | 70.9 | +1.7 | [+0.4, +3.1] | 0.994 |
+| mask_rcnn_swin_t | C | 67.8 | 71.1 | **+3.2** | **[+1.9, +4.6]** | 1.000 |
+| dino_swin_l | C | 33.0 | 39.1 | **+6.2** | **[+4.6, +7.8]** | 1.000 |
+
+**Mọi tiêu chí đã pre-register đều đạt**: DINO +6.2 (≥+5), CI không cắt 0; Mask-Swin +3.2 (≥+3),
+CI không cắt 0; không model nào giảm quá −0.5 (<<3); surrogate chỉ −0.3. Nhóm A (`fcos_r50`,
+`deformable_detr`) gần như flat, CI cắt 0 ở cả hai — nhất quán với cách đọc "đã sát ceiling ASR
+(~98%) từ OSFD chuẩn, không còn chỗ để cải thiện", và quan trọng hơn: **không có đánh đổi** (mức
+giảm nhỏ, trong biên chấp nhận được). `yolov3_d53` dương nhẹ nhưng CI cắt 0 (không ý nghĩa thống
+kê rõ ràng); `yolox_l` dương và CI không cắt 0 dù dưới ngưỡng +3 GO ban đầu.
+
+Diagnostic `cos(g_path, g_local)` theo step tái lập gần như y hệt N=20 (step 100: 0.795 vs 0.798
+trước đó; `sign_disagree`: 0.145 vs 0.144) — xác nhận effect không phải artifact của N nhỏ, và
+mechanism ổn định qua cỡ mẫu khác nhau.
+
+**Verdict: CONFIRMED CANDIDATE** (đúng lời đã chốt trước khi chạy: "Nếu DINO vẫn +5 trở lên và CI
+không cắt 0, lúc đó mình sẽ xem N6-B là confirmed candidate, không còn chỉ pilot signal"). Đây là
+lần đầu tiên trong project một candidate vượt qua cả hai cửa N=20 pilot và N=300 confirm với CI
+thống kê vững, trên đúng 2 hard target nhóm C mà toàn bộ project nhắm tới.
+
+**Ghi chú về novelty** (đã thảo luận, không đổi bởi kết quả confirm): effect size xác nhận không
+làm tăng novelty của cơ chế path-gradient (MIG/MuMoDIG đã có cho classification); contribution
+đáng bảo vệ là **path-average trong đúng feature-distortion loss của OD, đóng góp cụ thể vào gap
+CNN→Transformer trong object detection** — cần đối chiếu kỹ với paper 2026 dùng MIG-initialization
+cho OD (đã tìm thấy lúc scan literature N6) trước khi viết claim contribution, để chắc chắn không
+trùng.
+
+**Bước tiếp theo**: xác nhận held-out trên `val_100`, **không đổi hyperparameter nào** giữa
+`dev_300` và `val_100` (M=3, budget, mọi thứ giữ nguyên) — theo đúng quy trình đã định ở §17.
+
 ## 17. Trạng thái / bước tiếp theo
 
 - [x] Environment + checkpoint + COCO val2017 + manifest đã setup xong (`setup_env.sh`).
@@ -897,9 +948,13 @@ non-hard targets (fcos_r50, deformable_detr, yolov3_d53 — nhóm A/B còn thi�
       target nào giảm >3 điểm). Diagnostic `cos(g_path,g_local)` ổn định ~0.80 xuyên suốt 100
       step (không trôi về 1) — mechanism bền vững, không phải hiệu ứng early-stage. **Candidate
       mạnh nhất của project tính đến hiện tại.**
-- [ ] **(Ưu tiên chính)** Xác nhận N6-B trên `dev_300` (N lớn hơn) rồi held-out `val_100` theo
-      đúng quy trình đã định. Cân nhắc thêm pilot trên nhóm A/B còn thiếu (fcos_r50,
-      deformable_detr, yolov3_d53) để xác nhận không đánh đổi hiệu quả ở nhóm dễ transfer.
+- [x] **N6-B v0 xác nhận trên `dev_300` — CONFIRMED CANDIDATE** (xem §16): N=300, full 7 model,
+      paired bootstrap CI. DINO +6.2 (≥+5, CI=[+4.6,+7.8] không cắt 0), Mask-Swin +3.2
+      (CI=[+1.9,+4.6] không cắt 0), không model nào giảm >0.5, nhóm A/B không bị đánh đổi.
+      Mechanism tái lập ổn định qua cỡ mẫu (cosine step-100 ~0.795 cả N=20 lẫn N=300).
+- [ ] **(Ưu tiên chính)** Xác nhận held-out trên `val_100`, không đổi hyperparameter nào so với
+      `dev_300` (M=3, budget giữ nguyên) — bước cuối trước khi chốt N6-B là phương pháp thắng
+      cuộc của project.
 - [ ] N6-C (cross-layer relational feature distortion) hạ xuống phương án dự phòng — chỉ quay
       lại nếu N6-B không giữ được gain ở `dev_300`/`val_100`.
 - [ ] Sau khi có ứng viên tốt nhất: chạy full 200 step trên `dev_300` để confirm không

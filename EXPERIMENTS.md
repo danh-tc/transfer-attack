@@ -1,7 +1,7 @@
 <!-- TỰ SINH bởi scripts/gen_experiment_log.py từ runs/*.json. Không sửa tay. -->
 # Nhật ký thực nghiệm
 
-33 run được log trong `runs/`. Xem [RESEARCH.md](RESEARCH.md) để biết mục tiêu/metric/dataset.
+35 run được log trong `runs/`. Xem [RESEARCH.md](RESEARCH.md) để biết mục tiêu/metric/dataset.
 
 ## Tổng hợp
 
@@ -40,8 +40,46 @@
 | 20260824T144648Z | run_attack | n6a_rrb_cr_k3 | dev_50.json | 100 | 20/0 | 67.9% | 66.2% | `runs/run_attack_osfd_n6a_rrb_cr_k3_dev_50_n20_20260824T144648Z.json` |
 | 20260824T152203Z | run_attack | n6b_osfd_local | dev_50.json | 100 | 20/0 | 66.5% | 63.2% | `runs/run_attack_osfd_n6b_osfd_local_dev_50_n20_20260824T152203Z.json` |
 | 20260824T152236Z | run_attack | n6b_path_m3 | dev_50.json | 100 | 20/0 | 71.6% | 70.3% | `runs/run_attack_osfd_n6b_path_m3_dev_50_n20_20260824T152236Z.json` |
+| 20260824T180319Z | run_attack | n6b_osfd_local | dev_300.json | 100 | 296/4 | 75.1% | 77.9% | `runs/run_attack_osfd_n6b_osfd_local_dev_300_n300_20260824T180319Z.json` |
+| 20260824T180958Z | run_attack | n6b_path_m3 | dev_300.json | 100 | 296/4 | 76.9% | 79.9% | `runs/run_attack_osfd_n6b_path_m3_dev_300_n300_20260824T180958Z.json` |
 
 ## Chi tiết từng run
+
+### 20260824T180958Z — `run_attack_osfd_n6b_path_m3_dev_300_n300_20260824T180958Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_300.json`
+- attack: `n6b_path_m3`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=100, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800, m_lambda=3
+- crafted=296 skipped=4 craft=8622.2s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6b_path_m3 | faster_rcnn_r50 | — | 0.4372 | 0.0014 | 99.7% | 0.6321 | 0.0016 | 98.8% |
+| n6b_path_m3 | fcos_r50 | A | 0.4311 | 0.0077 | 98.2% | 0.6167 | 0.0131 | 97.7% |
+| n6b_path_m3 | deformable_detr | A | 0.4965 | 0.0016 | 99.7% | 0.6725 | 0.0023 | 98.0% |
+| n6b_path_m3 | yolov3_d53 | B | 0.3955 | 0.0312 | 92.1% | 0.6352 | 0.0590 | 84.6% |
+| n6b_path_m3 | yolox_l | B | 0.5680 | 0.1389 | 75.6% | 0.7467 | 0.1911 | 70.9% |
+| n6b_path_m3 | mask_rcnn_swin_t | C | 0.4791 | 0.0917 | 80.9% | 0.6972 | 0.1511 | 71.1% |
+| n6b_path_m3 | dino_swin_l | C | 0.6087 | 0.4066 | 33.2% | 0.7801 | 0.5498 | 39.1% |
+
+### 20260824T180319Z — `run_attack_osfd_n6b_osfd_local_dev_300_n300_20260824T180319Z.json`
+
+- loại run: `run_attack`
+- manifest: `data/manifests/dev_300.json`
+- attack: `n6b_osfd_local`
+- config: attack_type=osfd, epsilon=5.0, alpha=1.0, steps=100, mu=1.0, k=3.0, use_rrb=True, theta=7.0, l_s=10, rho=0.8, s_max=1.1, sigma=6.0, canvas=800, m_lambda=3
+- crafted=296 skipped=4 craft=8622.2s eval=Nones
+
+| attack | model | nhóm | mAP_clean | mAP_adv | mAP_drop % | AP50_clean | AP50_adv | ASR |
+|---|---|---|---|---|---|---|---|---|
+| n6b_osfd_local | faster_rcnn_r50 | — | 0.4372 | 0.0010 | 99.8% | 0.6321 | 0.0011 | 99.2% |
+| n6b_osfd_local | fcos_r50 | A | 0.4311 | 0.0059 | 98.6% | 0.6167 | 0.0098 | 98.1% |
+| n6b_osfd_local | deformable_detr | A | 0.4965 | 0.0011 | 99.8% | 0.6725 | 0.0014 | 98.5% |
+| n6b_osfd_local | yolov3_d53 | B | 0.3955 | 0.0365 | 90.8% | 0.6352 | 0.0673 | 83.9% |
+| n6b_osfd_local | yolox_l | B | 0.5680 | 0.1474 | 74.0% | 0.7467 | 0.2069 | 69.2% |
+| n6b_osfd_local | mask_rcnn_swin_t | C | 0.4791 | 0.1133 | 76.4% | 0.6972 | 0.1812 | 67.8% |
+| n6b_osfd_local | dino_swin_l | C | 0.6087 | 0.4392 | 27.8% | 0.7801 | 0.5842 | 33.0% |
 
 ### 20260824T152236Z — `run_attack_osfd_n6b_path_m3_dev_50_n20_20260824T152236Z.json`
 
