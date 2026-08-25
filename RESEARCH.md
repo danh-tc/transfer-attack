@@ -873,6 +873,70 @@ trùng.
 **Bước tiếp theo**: xác nhận held-out trên `val_100`, **không đổi hyperparameter nào** giữa
 `dev_300` và `val_100` (M=3, budget, mọi thứ giữ nguyên) — theo đúng quy trình đã định ở §17.
 
+### N6-B v0 xác nhận trên `val_100` (held-out thật) — **KẾT QUẢ HỖN HỢP (mixed), không phải
+full-confirm**
+
+Chạy đúng nguyên v0 (M=3, clean→current, cùng update rule, không đổi hyperparameter nào so với
+`dev_300`), N=98/100 (2 ảnh skip do 0 valid GT, giống hành vi thường thấy), full 7 model, cùng
+paired bootstrap 95% CI. Script/log giống hệt cách chạy `dev_300` (`scripts/n6b_path_pilot.py
+--manifest data/manifests/val_100.json --n-images 100`).
+
+**Lưu ý kỹ thuật xảy ra giữa chừng (không phải confound của kết quả)**: lần chạy đầu crash ở pha
+eval với `KeyError` — bug có sẵn trong `scripts/evaluate.py` (2 chỗ gọi
+`to_identity_coco_results()` không lọc dict cache dự đoán theo đúng `image_ids`/`common_ids` của
+run hiện tại trước khi build COCO results; cache dự đoán dùng chung thư mục
+`results/_n6b_predictions` giữa `dev_50`/`dev_300`/`val_100` nên lẫn ID ảnh không có trong
+`scale_by_image_id`). Bug lộ ra lần đầu đúng lúc này vì `val_100` là split đầu tiên hoàn toàn
+disjoint với `dev_300`/`dev_50` (đúng thiết kế held-out). Đã sửa 2 điểm filter dict tại
+[scripts/evaluate.py:177,199], verify bằng smoke test N=3 trước khi chạy lại full — không đổi
+logic craft/eval nào khác, không phải một xác nhận "được nới lỏng" để pass.
+
+**Kết quả (N=98, ASR %, so với `dev_300` N=296)**:
+
+| model | group | osfd_local | path_m3 | Δ val_100 | 95% CI val_100 | Δ dev_300 | 95% CI dev_300 |
+|---|---|---|---|---|---|---|---|
+| faster_rcnn_r50 (surrogate) | — | 98.7 | 97.6 | −1.1 | [−2.3, 0.0] | −0.3 | [−0.8, +0.1] |
+| deformable_detr | A | 98.6 | 97.3 | **−1.2** | **[−2.5, −0.2]** | −0.5 | [−1.1, 0.0] |
+| fcos_r50 | A | 97.0 | 96.6 | −0.3 | [−1.1, 0.0] | −0.3 | [−1.0, +0.4] |
+| yolov3_d53 | B | 81.9 | 83.3 | +1.4 | [−0.9, +3.6] | +0.7 | [−0.3, +1.7] |
+| yolox_l | B | 66.2 | 68.1 | +1.8 | [−0.4, +4.0] | +1.7 | [+0.4, +3.1] |
+| mask_rcnn_swin_t | C | 65.7 | 67.4 | **+1.7** | **[−0.4, +3.6]** | +3.2 | [+1.9, +4.6] |
+| dino_swin_l | C | 32.7 | 39.2 | **+6.5** | **[+2.9, +10.3]** | +6.2 | [+4.6, +7.8] |
+
+**Đọc kết quả, tách rõ 2 claim thay vì gộp chung "GO/NO-GO"**:
+
+1. **DINO — CONFIRMED, mạnh hơn cả `dev_300`**: +6.5 ASR (≥+5), CI [+2.9,+10.3] không cắt 0, còn
+   cao hơn điểm ước lượng của `dev_300` (+6.2). Đây là claim chính của N6-B và **giữ vững hoàn
+   toàn** trên held-out thật.
+2. **Mask-Swin-T — KHÔNG đạt tiêu chí đã dùng cho `dev_300`**: point estimate vẫn dương (+1.7,
+   same_side_frac=0.959 — 95.9% bootstrap draw vẫn dương) nhưng **CI cắt 0** lần đầu tiên
+   ([−0.4,+3.6]), khác hẳn `dev_300` (+3.2, CI [+1.9,+4.6] không cắt 0). Một phần do N nhỏ hơn
+   (98 vs 296, CI theo lý thuyết rộng hơn ~√3≈1.75× nếu variance không đổi — độ rộng CI thực tế
+   val_100/dev_300 ≈ 4.0/2.7 ≈ 1.48×, cùng bậc độ lớn) — **không kết luận được** "hiệu ứng biến
+   mất" hay "hiệu ứng vẫn còn nhưng underpowered ở N=98"; đây là kết quả **inconclusive**, không
+   phải falsify.
+3. **Pattern "DINO gain > Mask gain > CNN gain" (câu hỏi đặt ra trước khi chạy) — KHÔNG giữ
+   được rõ ràng trên `val_100`**: point estimate Mask-Swin (+1.7) thực ra **thấp hơn** cả
+   `yolox_l` (+1.8, nhóm B/CNN) và gần bằng `yolov3_d53` (+1.4) — trên split này, gain của
+   Mask-Swin không tách biệt được khỏi gain của nhóm CNN B về mặt thống kê (CI của cả 3 đều cắt
+   0). Ở `dev_300`, Mask-Swin tách biệt rõ khỏi nhóm B (CI không cắt 0, point estimate cao hơn
+   hẳn yolox_l +1.7). Trên `val_100` ranh giới này mờ đi.
+4. **`deformable_detr` (nhóm A) — tín hiệu âm nhẹ nhưng CI không cắt 0** (−1.2, CI
+   [−2.5,−0.2]), rõ hơn `dev_300` (−0.5, CI chạm 0). Biên độ rất nhỏ (~1 điểm ASR trên nền
+   ASR~97-98%, gần ceiling) — cách đọc hợp lý nhất là hiệu ứng ceiling/variance ở vùng ASR gần
+   bão hòa (surrogate cũng cùng dấu −1.1), không phải bằng chứng cho một trade-off cơ chế thật,
+   nhưng đáng ghi lại vì đây là CI đầu tiên trong toàn bộ N6-B không cắt 0 theo hướng bất lợi.
+
+**Kết luận (viết đúng mức, không spin)**: theo đúng tiêu chí held-out đã đặt trước khi chạy
+("DINO gain lớn > Mask gain > CNN gain nhỏ", "Mask dương rõ" để coi effectiveness "gần như
+khóa") — **DINO đạt, Mask KHÔNG đạt rõ ràng, pattern thứ tự DINO>Mask>CNN không giữ được sạch**.
+N6-B **không nên coi là "effectiveness đã khóa toàn diện"** ở bước này. Điều có thể khóa: **DINO
+gain là robust, tái lập qua 3 lần đo độc lập (pilot N=20, confirm N=300, held-out N=98) với CI
+không cắt 0 cả 3 lần** — đây là phần contribution chắc chắn nhất. Điều chưa thể khóa: liệu N6-B
+có thật sự cải thiện **cả 2** hard target nhóm C hay chỉ 1 (DINO), với Mask-Swin cần thêm bằng
+chứng (N lớn hơn, hoặc chấp nhận claim yếu hơn "positive trend, not yet significant at N=98") để
+kết luận.
+
 ## 17. Trạng thái / bước tiếp theo
 
 - [x] Environment + checkpoint + COCO val2017 + manifest đã setup xong (`setup_env.sh`).
@@ -952,9 +1016,14 @@ trùng.
       paired bootstrap CI. DINO +6.2 (≥+5, CI=[+4.6,+7.8] không cắt 0), Mask-Swin +3.2
       (CI=[+1.9,+4.6] không cắt 0), không model nào giảm >0.5, nhóm A/B không bị đánh đổi.
       Mechanism tái lập ổn định qua cỡ mẫu (cosine step-100 ~0.795 cả N=20 lẫn N=300).
-- [ ] **(Ưu tiên chính)** Xác nhận held-out trên `val_100`, không đổi hyperparameter nào so với
-      `dev_300` (M=3, budget giữ nguyên) — bước cuối trước khi chốt N6-B là phương pháp thắng
-      cuộc của project.
+- [x] **Xác nhận held-out trên `val_100` — KẾT QUẢ HỖN HỢP, không phải full-confirm** (xem
+      §16-B "N6-B v0 xác nhận trên `val_100`"): DINO +6.5 ASR, CI [+2.9,+10.3] không cắt 0 —
+      **CONFIRMED, robust qua 3 lần đo độc lập** (pilot N=20, dev_300 N=300, held-out N=98).
+      Mask-Swin +1.7, CI [−0.4,+3.6] **cắt 0** (khác `dev_300`'s +3.2 CI không cắt 0) —
+      inconclusive ở N=98, không tách biệt rõ khỏi gain nhóm CNN-B trên split này. Pattern
+      "DINO>Mask>CNN" đặt ra trước khi chạy **không giữ sạch**. `deformable_detr` có CI âm nhẹ
+      không cắt 0 lần đầu tiên (−1.2, [−2.5,−0.2]), biên độ nhỏ, đọc như ceiling-effect.
+      **Không nên tuyên bố "effectiveness đã khóa toàn diện"** — chỉ DINO gain là chắc chắn.
 - [ ] N6-C (cross-layer relational feature distortion) hạ xuống phương án dự phòng — chỉ quay
       lại nếu N6-B không giữ được gain ở `dev_300`/`val_100`.
 - [ ] Sau khi có ứng viên tốt nhất: chạy full 200 step trên `dev_300` để confirm không
@@ -966,3 +1035,373 @@ trùng.
   RRB toàn bộ); tách riêng rotation vs resizing vẫn là việc còn lại nếu cần độ chi tiết cao
   hơn.
 - ~~Sensitivity của `k`~~ — đã trả lời bởi E3: `k=3` gần như vô nghĩa nếu không có RRB.
+
+## 18. Prior-art verification cho N6-B: HIFA (2025) & IJCNN (2024)
+
+Sau khi N6-B v0 confirmed trên `dev_300` (§16), bước tiếp theo trong roadmap "prove" là verify
+prior-art trước khi tiếp tục đầu tư vào mechanism-proof/novelty-control, theo đúng 2 paper được
+chỉ định check: **IEEE IJCNN 2024** (`ieeexplore.ieee.org/document/10651486`) và **HIFA, Journal
+of Supercomputing 2025** (`doi.org/10.1007/s11227-025-07225-7`).
+
+**Giới hạn đã biết trước khi đọc**: cả hai bài đều closed-access (IEEE trả HTTP 418 khi fetch;
+Springer yêu cầu institutional login qua `idp.springer.com`) và không có bản open-access/preprint
+tìm được qua search. Không có full-text — chỉ có title/authors/abstract/TLDR qua Semantic Scholar.
+Quyết định (đã thống nhất): không theo đuổi route ngoài luồng để lấy full-text; dùng đúng phần
+metadata sẵn có, ghi rõ câu nào trong 4 câu hỏi kỹ thuật đã đặt ra **không trả lời được** do
+paywall, để không lẫn "đã verify" với "chưa verify".
+
+### 18-A. IJCNN 2024 — Wei, Gao, Quan, Luo, *"A Transferable Adversarial Attack against Object
+Detection Networks"* — **full-text đã đọc (user cung cấp PDF), CLOSED, không phải chỉ abstract**
+
+Physical adversarial **patch** dán lên nắp ca-pô xe (digital + in ra dán vật lý), tối ưu bằng
+Adam optimizer thường (lr=0.03, 500 epoch) trên loss tổng hợp
+`L_total = α·L_cls + β·L_IoU + λ·L_NPS + γ·L_TV` (Eq. 10) — `L_cls` (classification-probability,
+Eq. 4) và `L_IoU` (Eq. 3) là 2 core loss tấn công output/task, `L_NPS`/`L_TV` chỉ để patch in
+được/mượt màu, không liên quan cơ chế tấn công. Bổ sung robustness qua perspective/affine
+transform + light/blur augmentation của chính patch (không phải augmentation của toàn ảnh kiểu
+RRB). Surrogate/target chính: YOLOv3 (pretrained COCO); transferability test sang YOLOv2/YOLOv4/
+YOLOv7 (physical) — toàn bộ đều là **họ YOLO/CNN**, không có DETR/Swin/ViT nào. Domain hẹp hơn
+hẳn OSFD/N6-B: chỉ 3 category (car/dog/fire-hydrant), không phải toàn bộ 80 class COCO, và chỉ
+tấn công 1 object/ảnh (object có patch), không phải toàn ảnh dưới ràng buộc L∞.
+
+| câu hỏi đã đặt trước | trả lời (full-text, đã confirm) |
+|---|---|
+| IG dùng cho attribution hay update direction? | **Không dùng ở đâu cả** — không có bất kỳ đề cập integrated-gradient/path-gradient nào trong toàn bài; optimizer là Adam chuẩn trên patch pixel, không có khái niệm "path" nào trong update rule |
+| Path recompute mỗi iteration hay cố định? | N/A — không có path-gradient mechanism trong bài |
+| Path baseline→input hay clean→current? | N/A — không áp dụng |
+| Objective: task loss hay feature-distortion? | **Task loss xác nhận 100%** (Eq. 3/4/10: IoU + classification-probability), không chạm intermediate feature nào |
+| Có test CNN→Transformer/Swin không? | **Không, xác nhận** — YOLOv2/v3/v4/v7 only, toàn CNN one-stage |
+
+**Đánh giá (đã chốt, không còn "sơ bộ")**: **zero overlap cơ chế** với N6-B — khác hoàn toàn về
+attack surface (patch cục bộ 1 object vs L∞ toàn ảnh), objective (task loss vs feature-distortion),
+optimization (Adam trên patch vs I-FGSM/MI-momentum + path-integrated gradient trên toàn bộ
+`δ`), và scope test (CNN-only YOLO family vs CNN→Transformer). Bài này **không phải prior-art
+cần lo cho N6-B** — có thể đóng hẳn câu hỏi này, không cần theo dõi thêm.
+
+### 18-B. HIFA — Ding, Sun, Mao, Dai, Ding (2025), *"Improving the transferability of adversarial
+examples via the high-level interpretable features for object detection"*
+
+TLDR (Semantic Scholar): *"A High-level Interpretable Features Attack method that can effectively
+attack various object detection models... significantly enhancing the cross-model transferability
+of adversarial examples."* Search snippet bổ sung: mục đích đề cập rõ là **"address the issue of
+gradient saturation during backpropagation in existing methods"** qua **feature-level attack**
+(interfering với intermediate features model).
+
+| câu hỏi đã đặt trước | trả lời được từ abstract/TLDR? |
+|---|---|
+| IG dùng cho attribution hay update direction? | **Không xác nhận được** — "gradient saturation" là đúng vấn đề mà integrated-gradient (Sundararajan et al.) giải quyết trong literature classification, nhưng abstract không nói rõ HIFA có dùng IG hay cơ chế khác (vd warm-restart, feature-normalization, multi-scale selection) |
+| Path recompute mỗi iteration hay cố định? | Không trả lời được |
+| Path baseline→input hay clean→current? | Không trả lời được |
+| Objective: task loss hay feature-distortion? | **Feature-level** — xác nhận được (giống OSFD/N6-B, khác IJCNN 2024) |
+| Có test CNN→Transformer/Swin không? | Model list nêu trong TLDR: Faster R-CNN, SSD, RetinaNet, YOLOv5, YOLOv8 — **toàn CNN, không thấy Swin/ViT/DETR** nào. Tín hiệu gián tiếp (không phải xác nhận đầy đủ, vì TLDR có thể lược bớt model) |
+
+**Đánh giá sơ bộ (rủi ro overlap cao hơn IJCNN, nhưng chưa kết luận được)**: HIFA cùng family
+"feature-level attack cho OD" như OSFD/N6-B, và cụm từ "gradient saturation" trùng đúng
+motivation mà N6-B dùng để giải thích tại sao path-integrated gradient nên tốt hơn instantaneous
+gradient (§16-B0: "gradient tại một điểm không phải nơi chứa tín hiệu transfer hữu ích"). Đây là
+overlap-risk cao nhất trong 2 bài, **nhưng không đủ căn cứ để kết luận trùng cơ chế** — "gradient
+saturation" có nhiều cách giải quyết không phải path/integrated-gradient (ví dụ: chuẩn hoá
+feature-magnitude, chọn layer/scale khác, warm-up step size). Không có bằng chứng HIFA test trên
+backbone Transformer — nếu đúng (cần full-text xác nhận), đây vẫn là điểm khác biệt bảo vệ được
+cho N6-B (đúng gap CNN→Transformer mà HIFA không chạm tới).
+
+**Kết luận phần 18 (cập nhật sau khi có full-text IJCNN 2024)**: **IJCNN 2024 — CLOSED**, zero
+overlap xác nhận qua full-text (§18-A), không cần theo dõi thêm. **HIFA — vẫn OPEN**, vẫn chỉ có
+abstract/TLDR, là rủi ro cần theo dõi cao nhất nếu sau này có được full-text (chưa có route lấy
+được, theo lựa chọn đã thống nhất). Quyết định giữ nguyên: **không block mechanism-proof (bước 3)
+chờ full-text HIFA** — tiếp tục sang diagnostic `cos(g_local, g_target)` vs `cos(g_path,
+g_target)`, và khi viết claim contribution cuối cùng, đặt câu "HIFA full-text chưa verify" như
+một risk chưa đóng, không phải đã loại trừ.
+
+### 18-C. Fresh literature scan (sau held-out `val_100`) — trước khi thiết kế mechanism-proof
+
+Scan lại có chủ đích quanh 4 trục: path/integrated-gradient trong transferable OD, CNN→Transformer
+detector transfer, "recompute path mỗi iteration" (đặc thù cách N6-B làm), feature-loss
+path-averaging. Mục tiêu: khóa novelty scope trước khi tốn compute cho mechanism diagnostic.
+
+**HIFA — thêm chi tiết cơ chế (vẫn chỉ từ search snippet, chưa phải full-text, nhưng rõ hơn TLDR
+trước)**: dùng **"Diversity-Enhanced Integrated Gradients"** để *xác định key/high-level feature
+mà nhiều model cùng dựa vào* ("assess key features that different models rely on in common,
+providing guidance for generating adversarial examples") — "diversity" đến từ **augment input**
+(motion blur, salt-and-pepper noise) để làm IG ổn định hơn qua nhiều view, giống input-ensemble
+IG hơn là path theo trajectory tấn công. **Đọc khác biệt cấu trúc quan trọng so với N6-B**: HIFA
+dùng IG như **attribution/feature-selection** (chọn/định vị feature nào để tấn công mạnh hơn),
+còn N6-B dùng path-gradient để **thay thế trực tiếp toàn bộ ascent gradient mỗi step**
+(`g_path,t` là thứ duy nhất update rule dùng, không phải một feature-importance map phụ trợ);
+path của N6-B đi theo **trajectory `clean→current-state` đang tiến hóa cùng `δ_t` qua 100 step**,
+trong khi "diversity" của HIFA nghe giống một **tập input-view cố định** (augment ảnh) hơn là một
+path phụ thuộc trạng thái δ đang được tối ưu. → **Hạ mức risk overlap** so với đánh giá "cao nhất,
+cần theo dõi" ở §18-B ban đầu — vẫn OPEN (chưa full-text), nhưng bằng chứng gián tiếp hiện có
+nghiêng về "khác cơ chế" nhiều hơn là "trùng cơ chế".
+
+**MuMoDIG xác nhận = arXiv:2412.18844 (Ren et al., AAAI 2025)** — đúng paper project đã biết
+(nhắc ở §16-B0 làm motivation cho N6-B0). Refine integration path theo 3 trục
+multiplicity/monotonicity/diversity, domain **classification** (CNN+ViT), không phải OD. Không
+phải risk mới, chỉ xác nhận lại danh tính paper đã cite.
+
+**TAIG (arXiv:2205.13152)** — tổ tiên trực tiếp của dòng MIG/MuMoDIG, IG classification attack
+với 2 biến thể path (straight-line vs random piecewise-linear). Cùng family đã biết, domain
+classification, không phải OD — không phải risk mới.
+
+**DMFAA** (distillation-based surrogate, feature-based, cross-architecture: CNN/Mamba/Transformer)
+— cần bước train surrogate qua distillation từ model khác họ trước khi attack. **Cùng họ với
+candidate CRA đã loại ở Phase M** (§9, overlap cao với SAA) vì đều cần witness/distillation.
+Không đe dọa N6-B (N6-B không cần witness model, không train lại surrogate).
+
+**Context hỗ trợ motivation (không phải prior-art cạnh tranh)**: benchmark 2026
+(`arXiv:2602.16494`, "Benchmarking Adversarial Robustness and Adversarial Training Strategies for
+Object Detection") xác nhận độc lập, ngoài chính project: *"modern adversarial attacks against
+object detection models show a significant lack of transferability to transformer-based
+architectures"* — đúng đúng gap CNN→Transformer mà toàn bộ project theo đuổi từ đầu (RESEARCH.md
+§1), đáng trích dẫn khi viết motivation/related-work, không phải điều cần lo về novelty.
+
+**Kết luận 18-C**: không phát hiện thêm paper nào khớp đúng cơ chế "path-integrated gradient thay
+thế ascent gradient mỗi step, path clean→current-state theo δ đang tối ưu, cho feature-distortion
+loss trong OD, nhắm CNN→Transformer gap" — đây vẫn là niche N6-B đang giữ. HIFA là closest-still-
+open risk nhưng bằng chứng gián tiếp cho thấy vai trò IG khác nhau về cấu trúc. **Đủ tin tưởng để
+tiếp tục sang mechanism-proof (bước kế tiếp) mà không cần chặn lại chờ full-text HIFA.**
+
+## 19. Mechanism-proof: gradient-alignment diagnostic — GO criterion KHÔNG đạt, nhưng có tín hiệu
+hướng nhất quán
+
+Câu hỏi trực tiếp: liệu path-averaged gradient của surrogate có **align tốt hơn** với hướng
+ascent thật của chính target (`g_target` = gradient của target's own feature-distortion loss tại
+đúng state đó, không RRB) so với instantaneous gradient hay không — nếu có, đó là bằng chứng cơ
+chế thật cho "path tìm ra hướng transfer tốt hơn", không chỉ "path tạo step lớn hơn". Script mới
+`scripts/n6b_alignment_diagnostic.py`, không recraft (dùng noise đã crafted của `dev_300`), N=100,
+4 target: `yolox_l`, `mask_rcnn_swin_t`, `dino_swin_l`, `deformable_detr`.
+
+Bug gặp giữa chừng: DINO-Swin-L dùng gradient checkpointing nội bộ, không tương thích
+`torch.autograd.grad(loss, inputs=...)` (`RuntimeError: Checkpointing is not compatible with
+.grad()...`). Sửa bằng `.backward()` + đọc `.grad` trực tiếp thay vì `torch.autograd.grad`, verify
+qua smoke test N=5 cả 4 target trước khi chạy full — không đổi logic đo đạc.
+
+**GO criterion đã pre-register trước khi chạy**: `mean_cos_path − mean_cos_local ≥ +0.03` với 95%
+CI không cắt 0, trên `dino_swin_l` và/hoặc `mask_rcnn_swin_t`, mới tính là bằng chứng cơ chế trực
+tiếp. Kết quả (N=100):
+
+| target | group | mean_cos_local | mean_cos_path | Δ | 95% CI | same_side_frac |
+|---|---|---|---|---|---|---|
+| dino_swin_l | C | 0.0061 | 0.0096 | **+0.0034** | [+0.0024, +0.0045] | 1.000 |
+| mask_rcnn_swin_t | C | 0.0693 | 0.0755 | **+0.0062** | [+0.0037, +0.0087] | 1.000 |
+| yolox_l | B | 0.0487 | 0.0470 | −0.0017 | [−0.0044, +0.0011] cắt 0 | 0.892 |
+| deformable_detr | A | 0.0251 | 0.0219 | **−0.0033** | [−0.0049, −0.0015] | 1.000 |
+
+**Đọc đúng mức, không spin**: **GO criterion KHÔNG đạt trên cả 2 target** — cả `dino_swin_l`
+(+0.0034) và `mask_rcnn_swin_t` (+0.0062) đều có CI không cắt 0 (thống kê thật, N=100,
+same_side_frac=1.000 cả hai) nhưng **biên độ chỉ bằng ~11-20% ngưỡng đã đặt trước (+0.03)**. Theo
+đúng chữ đã pre-register, đây là **KHÔNG ĐẠT** — "path tạo alignment tốt hơn rõ rệt với true
+gradient của target" **không được chứng minh** ở quy mô này.
+
+**Tín hiệu đáng ghi lại dù không đạt GO — dấu của Δalignment khớp đúng dấu của ΔASR trên cả 4
+target đã test** (so với bảng ASR ở §16-B/held-out):
+
+| target | Δalignment (dấu) | ΔASR (dấu, dev_300/held-out) |
+|---|---|---|
+| dino_swin_l | + (statistically real) | + (mạnh, confirmed 3 lần đo) |
+| mask_rcnn_swin_t | + (statistically real) | + (dev_300), gần 0/cắt CI (held-out) |
+| yolox_l | ~0 (CI cắt 0) | + nhỏ, CI cắt 0 cả 2 lần đo |
+| deformable_detr | − (statistically real) | − (CI không cắt 0 ở held-out, biên độ nhỏ) |
+
+Không phải trùng hợp ngẫu nhiên hoàn toàn (4/4 model đúng dấu), nhưng **biên độ alignment quá nhỏ
+để một mình giải thích biên độ ASR gain quan sát được** (vd +0.0034 cosine trên DINO vs +6.5 điểm
+ASR) — cosine similarity ở một điểm là proxy khá gián tiếp/nhiễu cho hiệu ứng tích lũy qua 100
+step, nên một lợi thế alignment nhỏ mỗi step *có thể* cộng dồn thành khác biệt lớn theo thời gian,
+nhưng **diagnostic này (đo tại 1 điểm cuối trajectory) không đủ để khẳng định hay bác bỏ khả năng
+đó** — cần đo alignment dọc theo cả trajectory (không chỉ tại step cuối) mới trả lời được câu hỏi
+tích lũy.
+
+**Kết luận (đúng kỷ luật đã dùng suốt project)**: **"alignment tốt hơn" không phải lời giải thích
+đầy đủ/đủ mạnh cho ASR gain của N6-B** ở dạng đo hiện tại — đây là **NO-GO cho phiên bản
+mechanism-proof này theo đúng tiêu chí đã đặt**, dù hướng dấu nhất quán (không random) là một manh
+mối nhỏ đáng giữ lại, không phải noise thuần túy. Diễn giải thận trọng nhất: **ASR gain của N6-B
+nhiều khả năng đến từ một cơ chế khác alignment-tại-1-điểm** — ứng viên hợp lý nhất theo đúng
+hypothesis đã nêu trong docstring của script (chưa test): **hiệu ứng tích lũy/quỹ đạo** (nhiều
+alignment-nhỏ cộng dồn qua 100 step) hoặc **effective step size / saturation dynamics** (path có
+thể tránh bão hòa `sign()` sớm hơn local, tương tự cơ chế từng nghi ngờ ở DOB — dù DOB chính nó đã
+NO-GO cho weighting theo difficulty, saturation dynamics theo path lại là câu hỏi khác, chưa test
+trực tiếp).
+
+## 20. Novelty control: `G_osfd` vs `G_det` — pilot N=20, tín hiệu đúng hướng nhưng chưa đạt
+significance
+
+Sau khi alignment mechanism-proof (§19) không đạt GO criterion như cơ chế chính, câu hỏi novelty
+còn lại: N6-B thắng vì path-averaging **generically tốt cho mọi objective**, hay path-averaging
+có **interaction đặc biệt với đúng OSFD's object-aware feature-distortion loss**? Script mới
+`scripts/n6b_novelty_control.py`, 4 variant `det_local`/`det_path`/`osfd_local`/`osfd_path` (bảng
+thiết kế xem docstring script), N=20, `dev_50`, craft=1183.7s.
+
+**Lưu ý quan trọng về tính so sánh được**: `det_*` KHÔNG dùng RRB (đúng baseline `mi_fgsm` sẵn có
+của project, chưa từng dùng RRB), `osfd_*` có RRB — đây là **objective control**, không phải
+compute-identical ablation (đã note rõ trong docstring, không phải oversight).
+
+**Kết quả (N=20, ASR %)**:
+
+| model | group | ASR(det_local) | ASR(det_path) | **G_det** | ASR(osfd_local) | ASR(osfd_path) | **G_osfd** | interaction | 95% CI | same_side |
+|---|---|---|---|---|---|---|---|---|---|---|
+| faster_rcnn_r50 | — | 100.0 | 100.0 | 0.0 (ceiling) | 100.0 | 98.9 | −1.1 | −1.1 | [−3.9, 0.0] | 0.626 |
+| yolox_l | B | 16.8 | 21.8 | **+5.0** | 86.1 | 87.1 | +1.0 | −4.0 | [−10.9, +7.1] cắt 0 | 0.774 |
+| mask_rcnn_swin_t | C | 27.8 | 27.8 | **0.0 (flat)** | 81.4 | 86.6 | **+5.2** | +5.2 | [−2.4, +13.2] cắt 0 | 0.915 |
+| dino_swin_l | C | 11.0 | 11.0 | **0.0 (flat)** | 31.0 | 40.0 | **+9.0** | +9.0 | [−1.5, +16.1] cắt 0 (sát) | 0.964 |
+
+**Đọc đúng mức**: pattern đúng hướng hypothesis của bạn rất rõ về mặt **điểm ước lượng** — trên cả
+2 hard target nhóm C, `det_path` cho **ĐÚNG BẰNG 0 cải thiện** so với `det_local` (không phải chỉ
+nhỏ — flat tuyệt đối, 27.8→27.8 và 11.0→11.0), trong khi `osfd_path` cho gain rõ (+5.2, +9.0).
+Đây là khác biệt định tính (path giúp = 0 vs path giúp > 0), không chỉ khác biệt về độ lớn. Tuy
+nhiên **CI của interaction chưa cắt được 0 ở cả 3 model** — `dino_swin_l` sát nhất (CI
+[−1.5,+16.1], same_side_frac=0.964, tức 96.4% bootstrap draw dương) nhưng chưa đạt 95%
+significance ở N=20. Đây là pilot-stage signal, chưa phải confirmed.
+
+**1 confound cần nêu rõ, không giấu**: `yolox_l` đi NGƯỢC pattern (G_det=+5.0 > G_osfd=+1.0) —
+nhưng đọc kỹ thấy có **ceiling/floor confound**: `osfd_local` đã ở ASR=86.1% trên `yolox_l` (ít
+chỗ để tăng thêm), còn `det_local` chỉ ở 16.8% (nhiều chỗ để tăng) — so sánh Δ điểm-ASR trực tiếp
+giữa 2 objective có baseline khác xa nhau vốn thiên vị cho bên có baseline thấp hơn. Không thể kết
+luận "det thắng osfd trên yolox_l" một cách sạch từ số liệu này.
+
+Điểm nhất quán bổ sung với toàn bộ project: `ASR(det_local)` trên 2 hard target nhóm C rất thấp
+(27.8%, 11.0%) so với `ASR(osfd_local)` (81.4%, 31.0%) — tái xác nhận finding gốc của project
+(OSFD transfer tốt hơn hẳn task-loss baseline `mi_fgsm`/`det` sang hard target), độc lập với câu
+hỏi path-averaging.
+
+**Kết luận pilot N=20 (đúng vị trí, chưa confirmed lúc đó)**: tín hiệu đủ mạnh để không loại bỏ
+hypothesis, nhưng N=20 chưa đủ power. User quyết định KHÔNG scale N=100 full 4-target (chi phí
+~1.5-2h không đáng so với info gain) — thay vào đó chạy **DINO-only, N=50** (rẻ hơn, tập trung
+đúng nơi story mạnh nhất, đúng ưu tiên information-gain/compute-cost).
+
+### DINO-only N=49 (gần full `dev_50`) — interaction **CONFIRMED, CI không cắt 0 lần đầu**
+
+Script/config giữ nguyên (`scripts/n6b_novelty_control.py`, chỉ đổi `--targets dino_swin_l`),
+N=49/50 (1 skip do 0 GT hợp lệ, đúng hành vi thường thấy của `dev_50`), craft=2965.1s.
+
+| model | ASR(det_local) | ASR(det_path) | G_det | ASR(osfd_local) | ASR(osfd_path) | G_osfd | interaction | 95% CI | same_side |
+|---|---|---|---|---|---|---|---|---|---|
+| dino_swin_l | 9.6% | 10.0% | +0.4 | 28.3% | 34.7% | **+6.4** | **+6.0** | **[+0.9, +10.5]** | 0.987 |
+| faster_rcnn_r50 (surrogate) | 99.1% | 98.6% | −0.5 | 98.2% | 97.3% | −0.9 | −0.5 | [−2.4, +1.6] cắt 0 | 0.603 |
+
+**Đọc kết quả**: trên `dino_swin_l`, `det_path` gần như không cải thiện gì so với `det_local`
+(+0.4, ASR đã rất thấp 9.6%→10.0%, task-loss baseline transfer rất kém sang DINO — tái xác nhận
+finding gốc project), trong khi `osfd_path` cho gain rõ (+6.4, khớp đúng tầm với N6-B's confirmed
+DINO gain ở §16-B: +6.2 dev_300, +6.5 held-out). **Interaction = +6.0, CI=[+0.9,+10.5] KHÔNG cắt
+0** — lần đầu tiên trong toàn bộ novelty-control đạt statistical significance. Surrogate (đã
+ceiling ~98-99% cả 2 objective) không có gì để phân biệt, đúng kỳ vọng.
+
+**Kết luận (đủ căn cứ để phát biểu, nhưng đọc đúng phạm vi)**: trên `dino_swin_l` cụ thể,
+**path-averaging có interaction thật với đúng OSFD objective — không phải hiệu ứng generic của
+path-averaging trên mọi loss** (nếu path generic tốt, `det_path` đã phải cho gain tương tự trên
+DINO, nhưng không — gần như flat). Đây là bằng chứng novelty tốt nhất hiện có, **nhưng phạm vi kết
+luận chỉ giới hạn ở DINO** (1 model, 1 hard target) — chưa lặp lại trên `mask_rcnn_swin_t` ở N đủ
+lớn (pilot N=20 cho tín hiệu tương tự +5.2 nhưng CI vẫn cắt 0, chưa re-run riêng Mask ở N lớn hơn
+theo cùng cách đã làm cho DINO). Không suy rộng thành "novelty story đã khóa cho mọi hard target"
+— chỉ khóa được cho DINO.
+
+## 21. Breadth test: `dino_r50` — tách được decoder-DINO khỏi backbone-Swin, kết luận rõ ràng
+
+Câu hỏi: gain bất thường của N6-B trên `dino_swin_l` (+6.2 dev_300, +6.5 held-out, CI không cắt 0
+cả 2 lần) đến từ **decoder DINO** (denoising anchor box, contrastive query selection) hay từ
+**backbone Swin**? `dino_swin_l` gộp cả 2 biến số nên không tách được. Thêm target mới
+**`dino_r50`** vào `MODEL_REGISTRY` (group mới "D", không ép vào A/B/C có sẵn vì đây là trục khác)
+— cùng decoder DINO, backbone **ResNet-50** (CNN) thay vì Swin. Checkpoint tải công khai từ
+`download.openmmlab.com` (`dino-4scale_r50_8xb2-12e_coco`), verify tích hợp đầy đủ (config
+resolve tự động qua `.mim/configs`, checkpoint load sạch không warning, backbone forward 3 stage
+đúng shape ResNet-FPN, `predict_canvas` end-to-end ra detection hợp lệ) trước khi dùng.
+
+**Không cần craft lại gì** — script mới `scripts/n6b_breadth_eval.py` tái dùng trực tiếp noise đã
+crafted của `dev_300` (N=296, đúng run đã CONFIRMED `dino_swin_l` +6.2 ở §16-B), chỉ chạy
+inference cho model mới. Miễn phí về craft compute, N=296 (mạnh hơn hẳn 1 pilot mới).
+
+**Kết quả**:
+
+| model | decoder | backbone | ASR(osfd_local) | ASR(path_m3) | Δ | 95% CI |
+|---|---|---|---|---|---|---|
+| `dino_swin_l` | DINO | Swin (Transformer) | 33.0% | 39.1% | **+6.2** | **[+4.6,+7.8]** không cắt 0 |
+| `dino_r50` | DINO (giống hệt) | ResNet-50 (CNN) | **99.2%** | 98.8% | −0.3 | [−0.9,+0.2] cắt 0 |
+
+**Đọc rõ, không mơ hồ**: `dino_r50` đã bão hòa ASR ~99% **ngay từ `osfd_local`** — giống hệt
+pattern của mọi target backbone-CNN khác trong project (`fcos_r50` 97-98%, `deformable_detr`
+97-99%, surrogate 98-99%), khác hẳn `dino_swin_l` (chỉ 33%, target khó nhất project). Path không
+còn gì để cải thiện thêm (đã ceiling, đúng logic "ít chỗ để tăng" đã thấy ở mọi CNN-backbone
+target khác) — delta âm nhẹ, CI cắt 0, giống hệt `fcos_r50`/`deformable_detr`.
+
+**Kết luận — ĐÃ SỬA LẠI để không overclaim (bản đầu tiên đi quá xa, xem lý do bên dưới)**. Cần
+tách rõ 2 hypothesis khác nhau mà kết quả `dino_r50` KHÔNG có sức nặng như nhau để trả lời:
+
+- **H1 — nguồn gốc transfer difficulty**: `Swin/representation gap → OSFD transfer khó`.
+  `dino_r50` **support H1 khá mạnh**: thay Swin-L bằng R50, giữ nguyên kiến trúc decoder DINO, thì
+  `ASR_local` từ 33.0% (Swin) nhảy lên 99.2% (R50) — loại bỏ gần như hoàn toàn "hard transfer
+  behavior" trong khi giữ nguyên decoder. Câu đúng mức để viết: *"Replacing the Swin backbone of
+  DINO with ResNet-50 eliminates the severe transfer difficulty observed on DINO-Swin-L, while
+  keeping the DINO detector architecture. This implicates the backbone/representation family,
+  rather than the DINO decoder alone, as the major source of transfer difficulty."* Câu này được
+  data support tốt, có thể dùng.
+- **H2 — tại sao N6-B (path-averaging) giúp**: `Swin/representation gap → path-averaging hữu ích`.
+  **`dino_r50` KHÔNG trả lời được câu này**, vì một confound lớn: `ASR_local` đã ~99.2% — bão hòa
+  ceiling gần như tuyệt đối, gần như không còn detection nào để "phá" thêm, nên **không quan sát
+  được liệu path operator có giúp gì hay không trên kiến trúc này** — delta âm nhẹ (−0.3, CI cắt
+  0) phản ánh "hết chỗ để đo", không phải "path không giúp CNN backbone" theo nghĩa mechanism.
+
+**Không viết** "Swin backbone là biến số quyết định path gain" ở dạng dứt điểm — H2 chưa được
+`dino_r50` xác nhận (chỉ mới H1). Bằng chứng hiện có cho H2 (path gain theo backbone gia đình)
+vẫn chỉ mang tính **supportive, chưa khóa**:
+
+| target | backbone | path gain | trạng thái |
+|---|---|---|---|
+| dino_swin_l | Swin | **+6.2 / +6.5** | confirmed, CI không cắt 0 cả 2 lần đo |
+| mask_rcnn_swin_t | Swin | +3.2 (dev_300) / +1.7 (held-out) | **partial-support**, held-out CI cắt 0 |
+| dino_r50 | R50 (CNN) | −0.3 nhưng **ceiling** | không đo được (không phải bằng chứng "path không giúp") |
+| yolox_l | CNN (Darknet) | +1-2 | yếu, CI thường cắt 0 |
+| fcos_r50 / deformable_detr | CNN (R50) | ≈0 / âm nhẹ | ceiling tương tự |
+
+DINO robust cho H2, Mask chỉ partial. **Cần một matched-pair thứ hai không bị ceiling để test H2
+sạch** — xem kế hoạch phiên sau bên dưới (`HANDOFF.md`): thêm `mask_rcnn_r50` (Mask R-CNN +
+ResNet-50-FPN, cùng family detector với `mask_rcnn_swin_t` nhưng khác backbone), tái dùng noise
+`dev_300` có sẵn (không cần craft lại, giống hệt cách đã làm cho `dino_r50`). Nếu
+`mask_rcnn_r50` cũng gần-ceiling (ASR_local cao, ít room) trong khi `mask_rcnn_swin_t` thấp
+(67.8%, path gain +3.2) — đó sẽ là **2 matched-pair độc lập cùng chỉ 1 hướng**, bằng chứng cho H2
+mạnh hơn hẳn 1 pair đơn lẻ. Nếu `mask_rcnn_r50` KHÔNG ceiling (còn room để đo) mà path vẫn không
+giúp nhiều — đó lại là bằng chứng chống lại H2 theo cách sạch hơn `dino_r50` (vì lần này loại được
+confound ceiling).
+
+### Matched-pair #2: `mask_rcnn_r50` — cùng pattern với DINO pair, củng cố H1 rõ rệt
+
+Thêm `mask_rcnn_r50` (Mask R-CNN + ResNet-50-FPN, checkpoint công khai `mask-rcnn_r50_fpn_1x_coco`
+từ `download.openmmlab.com`) vào `MODEL_REGISTRY` (group "D", cùng nhóm với `dino_r50`), verify
+tích hợp (backbone 4-stage ResNet-FPN đúng shape, `predict_canvas` hoạt động), rồi eval bằng
+`scripts/n6b_breadth_eval.py` trên noise `dev_300` có sẵn — **không craft lại**, N=296, gần như
+free về compute (chỉ inference).
+
+**Kết quả, đặt cạnh cả 2 matched-pair**:
+
+| pair | head/decoder | backbone | ASR(local) | ASR(path) | Δ | 95% CI |
+|---|---|---|---|---|---|---|
+| `dino_swin_l` | DINO | Swin-L | 33.0% | 39.1% | **+6.2** | [+4.6,+7.8] không cắt 0 |
+| `dino_r50` | DINO (giống hệt) | R50 | 99.2% | 98.8% | −0.3 | [−0.9,+0.2] cắt 0 |
+| `mask_rcnn_swin_t` | Mask R-CNN | Swin-T | 67.8% | 71.1% | **+3.2** | [+1.9,+4.6] không cắt 0 |
+| `mask_rcnn_r50` | Mask R-CNN (giống hệt) | R50 | **99.3%** | 98.6% | **−0.7** | **[−1.22,−0.22]** không cắt 0 |
+
+**Đọc kết quả — H1 được củng cố mạnh bởi pair độc lập thứ hai**: y hệt pattern `dino_r50`, đổi
+Swin→R50 mà giữ nguyên detector head (Mask R-CNN) làm `ASR_local` nhảy từ 67.8%→99.3% — cùng
+hướng, cùng biên độ lớn, trên một kiến trúc detector hoàn toàn khác (two-stage RPN+RoI, không
+phải DETR-style decoder). **2 matched-pair độc lập (DINO decoder, Mask R-CNN head) giờ cùng chỉ
+1 hướng** — bằng chứng cho H1 ("Swin/representation gap là nguồn gốc transfer difficulty, không
+phải đặc thù của riêng 1 decoder/head nào") mạnh hơn hẳn so với chỉ 1 pair.
+
+**Về H2 — khác `dino_r50` một điểm đáng chú ý**: `mask_rcnn_r50` có CI **không cắt 0** (khác
+`dino_r50` CI cắt 0) nhưng theo hướng **âm** (−0.7, CI=[−1.22,−0.22]) — path làm giảm nhẹ ASR trên
+target CNN gần-ceiling này, có ý nghĩa thống kê thật (không phải nhiễu). Không mâu thuẫn với H1
+— khớp đúng pattern đã thấy ở mọi CNN-backbone gần-ceiling khác trong project (`fcos_r50`,
+`deformable_detr`, surrogate đều âm nhẹ) — đọc hợp lý nhất: khi đã bão hòa ASR, path-averaging
+không "lãng phí" ngân sách một cách vô hại mà có xu hướng nhẹ về hướng kém tối ưu hơn local thuần
+(một dạng biến thể của saturation dynamics, không phải bằng chứng path "hại" theo nghĩa cơ chế).
+**Không đổi kết luận H1**; với H2 vẫn giữ nguyên vị trí đã chốt — chỉ `dino_swin_l` có interaction
+CI không cắt 0 dương rõ (xem §20 DINO-only N=49), `mask_rcnn_swin_t` mới chỉ có ASR-gain riêng
+confirmed (§16-B) chứ chưa có interaction-vs-det_path confirmed cùng chuẩn.
+
+**Kết luận cập nhật (thay thế phần "chưa chốt" ở trên)**: H1 giờ **support bởi 2 matched-pair độc
+lập**, đủ mạnh để phát biểu rộng hơn: *"Across two independent detector-head families (DINO's
+transformer decoder and Mask R-CNN's two-stage RPN+RoI head), replacing a Swin backbone with
+ResNet-50 while keeping the head fixed eliminates the transfer difficulty almost entirely (ASR
+jumps to ~99% in both cases) — strong convergent evidence that backbone/representation family,
+not detector-head architecture, is the primary source of the CNN→Transformer transfer gap this
+project targets."* H2 (path-averaging specifically amplified by Swin) vẫn giữ nguyên trạng thái
+đã chốt trước đó — confirmed cho DINO, chưa confirmed cho Mask-Swin-T ở cùng chuẩn interaction
+test.

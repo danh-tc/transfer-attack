@@ -75,6 +75,26 @@ MODEL_REGISTRY: list[ModelSpec] = [
         config_name="dino-5scale_swin-l_8xb2-12e_coco",
         ckpt_filename="dino-5scale_swin-l_8xb2-12e_coco_20230228_072924-a654145f.pth",
     ),
+    # Group D -- same DINO decoder as dino_swin_l, but ResNet-50 (CNN) backbone
+    # instead of Swin. Added specifically to separate "DINO decoder mechanism"
+    # from "Swin backbone" as the driver of N6-B's outsized dino_swin_l gain
+    # (RESEARCH.md N6-B breadth test, added post held-out/novelty-control).
+    ModelSpec(
+        name="dino_r50",
+        role="target",
+        group="D",
+        config_name="dino-4scale_r50_8xb2-12e_coco",
+        ckpt_filename="dino-4scale_r50_8xb2-12e_coco_20221202_182705-55b2bba2.pth",
+    ),
+    # Group D -- matched-pair #2: same Mask R-CNN detector head as
+    # mask_rcnn_swin_t, but ResNet-50 (CNN) backbone instead of Swin-T.
+    ModelSpec(
+        name="mask_rcnn_r50",
+        role="target",
+        group="D",
+        config_name="mask-rcnn_r50_fpn_1x_coco",
+        ckpt_filename="mask_rcnn_r50_fpn_1x_coco_20200205-d4b0c5d6.pth",
+    ),
 ]
 
 

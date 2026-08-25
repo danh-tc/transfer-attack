@@ -174,7 +174,13 @@ def evaluate_one_model(spec, args, coco, image_ids, img_dir, gt_cache, logger) -
     clean_preds = get_clean_predictions(
         handle, spec, image_ids, coco, img_dir, args.canvas, args.predictions_dir, args.device, args.force_clean, logger
     )
-    clean_metrics = compute_coco_map(coco, to_identity_coco_results(clean_preds, scale_by_image_id), image_ids)
+    # clean_preds is a cache accumulated across manifests sharing predictions_dir
+    # (e.g. dev_50/dev_300/val_100 all writing to the same clean/<model>.json) --
+    # scale_by_image_id only covers THIS run's image_ids, so scope to those before
+    # building coco results (mirrors the common_ids filtering below for adv_preds).
+    clean_metrics = compute_coco_map(
+        coco, to_identity_coco_results({i: clean_preds[i] for i in image_ids}, scale_by_image_id), image_ids
+    )
     rows = [make_row("clean", spec, clean_metrics["AP"], clean_metrics["AP50"], asr=None)]
 
     for attack in args.attacks:
@@ -190,7 +196,9 @@ def evaluate_one_model(spec, args, coco, image_ids, img_dir, gt_cache, logger) -
         clean_common_metrics = compute_coco_map(
             coco, to_identity_coco_results({i: clean_preds[i] for i in common_ids}, scale_by_image_id), common_ids
         )
-        adv_metrics = compute_coco_map(coco, to_identity_coco_results(adv_preds, scale_by_image_id), common_ids)
+        adv_metrics = compute_coco_map(
+            coco, to_identity_coco_results({i: adv_preds[i] for i in common_ids}, scale_by_image_id), common_ids
+        )
         asr, evaded_total, clean_correct_total = compute_asr(
             clean_preds, adv_preds, gt_boxes_by_image_id, gt_cat_ids_by_image_id, common_ids, args.iou_thr, args.score_thr
         )
