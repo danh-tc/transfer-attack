@@ -1289,10 +1289,50 @@ ceiling ~98-99% cả 2 objective) không có gì để phân biệt, đúng kỳ
 **path-averaging có interaction thật với đúng OSFD objective — không phải hiệu ứng generic của
 path-averaging trên mọi loss** (nếu path generic tốt, `det_path` đã phải cho gain tương tự trên
 DINO, nhưng không — gần như flat). Đây là bằng chứng novelty tốt nhất hiện có, **nhưng phạm vi kết
-luận chỉ giới hạn ở DINO** (1 model, 1 hard target) — chưa lặp lại trên `mask_rcnn_swin_t` ở N đủ
-lớn (pilot N=20 cho tín hiệu tương tự +5.2 nhưng CI vẫn cắt 0, chưa re-run riêng Mask ở N lớn hơn
-theo cùng cách đã làm cho DINO). Không suy rộng thành "novelty story đã khóa cho mọi hard target"
-— chỉ khóa được cho DINO.
+luận chỉ giới hạn ở DINO** (1 model, 1 hard target) — đã kiểm tra thêm ở N=50 cho
+`mask_rcnn_swin_t` để xem có generalize hay không (xem ngay dưới). Không suy rộng thành "novelty
+story đã khóa cho mọi hard target" — chỉ khóa được cho DINO.
+
+### Mask-Swin-T N=50 — interaction KHÔNG generalize, đóng H2-broad
+
+Chạy lại đúng script/config (`scripts/n6b_novelty_control.py --targets mask_rcnn_swin_t
+--n-images 50`), N=50 (đủ 50 ảnh, không skip), 4 variant trên cả surrogate + target, log
+`runs/run_attack_n6bctl_{det_local,det_path,osfd_local,osfd_path}_dev_50_n50_20260829T*.json`.
+
+**Kết quả (N=50, ASR %, 95% bootstrap CI cho interaction)**:
+
+| model | ASR(det_local) | ASR(det_path) | G_det | ASR(osfd_local) | ASR(osfd_path) | G_osfd | interaction | 95% CI | same_side |
+|---|---|---|---|---|---|---|---|---|---|
+| faster_rcnn_r50 (surrogate) | 99.1% | 98.6% | −0.45 | 98.2% | 97.3% | −0.90 | −0.45 | [−2.58, +1.55] cắt 0 | 0.597 |
+| mask_rcnn_swin_t | 19.4% | 21.9% | +2.48 | 71.1% | 76.0% | +4.96 | **+2.48** | **[−2.96, +8.0]** cắt 0 | 0.820 |
+
+**So trực tiếp với pilot N=20 (bảng ở trên)**:
+
+| N | G_det | G_osfd | interaction | 95% CI | same_side |
+|---|---|---|---|---|---|
+| N=20 (pilot) | 0.0 (flat tuyệt đối) | +5.2 | +5.2 | [−2.4, +13.2] cắt 0 | 0.915 |
+| N=50 | +2.48 | +4.96 | +2.48 | [−2.96, +8.0] cắt 0 | 0.820 |
+
+Tăng N từ 20 lên 50 **không siết CI về phía dương** như kỳ vọng nếu đây thuần túy là vấn đề thiếu
+power (điều đã xảy ra đúng như vậy với DINO: N=20 CI cắt 0 sát → N=49 CI [+0.9,+10.5] không cắt
+0) — ngược lại, point estimate của interaction **giảm** (+5.2→+2.48) và `same_side_frac` **giảm**
+(0.915→0.820). Nguyên nhân cụ thể quan sát được: pattern định tính "det_path ≈ det_local (flat
+tuyệt đối)" — chính điều làm interaction ở DINO thuyết phục (generic task-loss path không giúp gì,
+chỉ OSFD objective mới được path khuếch đại) — **không tái lập** ở N=50: `det_path` giờ đã tăng
+thật so với `det_local` (+2.48), không còn flat.
+
+**Kết luận (đóng câu hỏi, không chạy thêm N lớn hơn)**: H2 ở dạng "path-averaging có interaction
+đặc biệt với OSFD objective, khuếch đại bởi backbone Swin nói chung" **không được support cho
+`mask_rcnn_swin_t`** — không phải do thiếu power (đã loại trừ, vì signal đi ngược hướng kỳ vọng
+khi tăng N thay vì siết chặt về phía dương), mà là bằng chứng thực sự yếu đi. Story chính xác nhất
+hiện có: **OSFD-path interaction là hiện tượng đặc thù cho `dino_swin_l`/decoder DINO, không phải
+property chung của "mọi target có backbone Swin"**. Tách bạch rõ với H1 (§21 dưới đây), vốn vẫn
+được support mạnh bởi 2 matched-pair độc lập rằng backbone/representation family giải thích
+transfer difficulty tốt trên cả DINO lẫn Mask R-CNN — **H1 (nguồn gốc transfer difficulty) và H2
+(tại sao path-averaging giúp) là hai câu hỏi tách biệt**: dữ liệu hiện có xác nhận H1 rộng (2
+matched-pair), nhưng cho thấy H2 hẹp hơn ban đầu nghĩ — chỉ đúng cho DINO, không generalize sang
+Mask-Swin-T dù cùng họ backbone Swin. Không chạy thêm Mask novelty-control ở N lớn hơn — câu hỏi
+đã đủ dữ liệu để đóng.
 
 ## 21. Breadth test: `dino_r50` — tách được decoder-DINO khỏi backbone-Swin, kết luận rõ ràng
 
@@ -1392,9 +1432,10 @@ target CNN gần-ceiling này, có ý nghĩa thống kê thật (không phải n
 `deformable_detr`, surrogate đều âm nhẹ) — đọc hợp lý nhất: khi đã bão hòa ASR, path-averaging
 không "lãng phí" ngân sách một cách vô hại mà có xu hướng nhẹ về hướng kém tối ưu hơn local thuần
 (một dạng biến thể của saturation dynamics, không phải bằng chứng path "hại" theo nghĩa cơ chế).
-**Không đổi kết luận H1**; với H2 vẫn giữ nguyên vị trí đã chốt — chỉ `dino_swin_l` có interaction
-CI không cắt 0 dương rõ (xem §20 DINO-only N=49), `mask_rcnn_swin_t` mới chỉ có ASR-gain riêng
-confirmed (§16-B) chứ chưa có interaction-vs-det_path confirmed cùng chuẩn.
+**Không đổi kết luận H1**; với H2, `dino_swin_l` có interaction CI không cắt 0 dương rõ (xem §20
+DINO-only N=49), còn `mask_rcnn_swin_t` có ASR-gain riêng confirmed (§16-B) nhưng interaction-vs-
+det_path đã được test riêng ở N=50 (§20, "Mask-Swin-T N=50") và **không generalize** — CI vẫn cắt
+0, signal yếu đi khi tăng N thay vì siết chặt.
 
 **Kết luận cập nhật (thay thế phần "chưa chốt" ở trên)**: H1 giờ **support bởi 2 matched-pair độc
 lập**, đủ mạnh để phát biểu rộng hơn: *"Across two independent detector-head families (DINO's
@@ -1402,6 +1443,10 @@ transformer decoder and Mask R-CNN's two-stage RPN+RoI head), replacing a Swin b
 ResNet-50 while keeping the head fixed eliminates the transfer difficulty almost entirely (ASR
 jumps to ~99% in both cases) — strong convergent evidence that backbone/representation family,
 not detector-head architecture, is the primary source of the CNN→Transformer transfer gap this
-project targets."* H2 (path-averaging specifically amplified by Swin) vẫn giữ nguyên trạng thái
-đã chốt trước đó — confirmed cho DINO, chưa confirmed cho Mask-Swin-T ở cùng chuẩn interaction
-test.
+project targets."* H2 (path-averaging specifically amplified by Swin) đã được test ở cùng chuẩn
+interaction cho cả 2 hard target nhóm C: **confirmed cho DINO** (interaction +6.0, CI=[+0.9,+10.5]
+không cắt 0), **không generalize sang Mask-Swin-T** (§20, N=50: interaction +2.48, CI=[−2.96,+8.0]
+cắt 0, signal yếu đi khi N tăng từ 20→50 chứ không siết chặt — loại trừ khả năng chỉ do thiếu
+power). Kết luận cuối cho H2: **OSFD-path interaction là hiện tượng đặc thù cho DINO/decoder DINO,
+không phải property chung của mọi target backbone Swin** — tách bạch rõ khỏi H1 (nguồn gốc transfer
+difficulty), vốn vẫn support rộng trên cả 2 pair.

@@ -1,0 +1,55 @@
+{
+  "timestamp": "20260829T105856Z",
+  "attack": "n6bctl_det_local",
+  "manifest": "data/manifests/dev_50.json",
+  "seed": 42,
+  "n_images": 50,
+  "config": {
+    "attack_type": "osfd",
+    "epsilon": 5.0,
+    "alpha": 1.0,
+    "steps": 100,
+    "mu": 1.0,
+    "k": 3.0,
+    "use_rrb": true,
+    "theta": 7.0,
+    "l_s": 10,
+    "rho": 0.8,
+    "s_max": 1.1,
+    "sigma": 6.0,
+    "canvas": 800,
+    "m_lambda": 3,
+    "variant": "det_local",
+    "uses_rrb": false
+  },
+  "results": {
+    "n_images_used": 49,
+    "n_crafted": 49,
+    "n_skipped": 1,
+    "craft_elapsed_sec": 2880.5,
+    "rows": [
+      {
+        "attack": "n6bctl_det_local",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": 0.46111803103228965,
+        "mAP_adv": 5.292218374562767e-07,
+        "mAP_drop_pct": 99.99988523072145,
+        "AP50_clean": 0.6468442846160859,
+        "AP50_adv": 3.970985333827501e-06,
+        "ASR": 99.09909909909909
+      },
+      {
+        "attack": "n6bctl_det_local",
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "mAP_clean": 0.5052464205306577,
+        "mAP_adv": 0.40186811507393794,
+        "mAP_drop_pct": 20.460967412325665,
+        "AP50_clean": 0.6956621223023829,
+        "AP50_adv": 0.5909065344366563,
+        "ASR": 19.421487603305785
+      }
+    ]
+  }
+}

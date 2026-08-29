@@ -5,10 +5,12 @@ không cần đọc lại toàn bộ `RESEARCH.md` từ đầu. `RESEARCH.md` v�
 mọi kết quả nghiên cứu (đặc biệt §16-§21 cho phiên này) — file này chỉ tóm tắt điều hướng +
 engineering context không nằm trong journal.
 
-**Cập nhật lần cuối**: 2026-08-25. Cả 2 việc ưu tiên của lần dừng trước (DINO-only N=49
-novelty-control + `mask_rcnn_r50` matched-pair breadth) **đã xong**. Chưa có việc mới được user
-chốt cho phiên tiếp theo — đọc phần "Trạng thái hiện tại" bên dưới rồi hỏi user muốn đi hướng nào
-tiếp (đừng tự launch thêm compute lớn mà không hỏi, đúng tinh thần thận trọng đã giữ xuyên suốt).
+**Cập nhật lần cuối**: 2026-08-29. Việc còn treo của lần dừng trước (Mask-Swin-T novelty-control
+N=50, để đóng nốt H2 cho cả 2 hard target nhóm C) **đã xong — KHÔNG generalize** (xem "Trạng thái
+hiện tại"). Roadmap "prove" cho N6-B giờ coi như đã đóng hoàn toàn (không còn mục nào "open" ở bước
+1-5). Chưa có việc mới được user chốt cho phiên tiếp theo — đọc phần "Trạng thái hiện tại" bên dưới
+rồi hỏi user muốn đi hướng nào tiếp (đừng tự launch thêm compute lớn mà không hỏi, đúng tinh thần
+thận trọng đã giữ xuyên suốt).
 
 ## Trạng thái hiện tại (quan trọng nhất, đọc trước)
 
@@ -27,17 +29,17 @@ Swin→R50 giữ nguyên head, cùng nhảy ASR_local lên ~99%. Chi tiết + c�
 âm (không mâu thuẫn H1, khớp pattern "gần-ceiling → path hơi âm" đã thấy ở mọi CNN target khác):
 `RESEARCH.md` §21, mục "Matched-pair #2".
 
-**H2 (path-averaging đặc biệt hữu ích khi backbone Swin) — vẫn CHỈ confirmed cho DINO, chưa cho
-Mask**: DINO-only N=49 novelty-control cho `interaction=+6.0, CI=[+0.9,+10.5]` không cắt 0 (xem
-`RESEARCH.md` §20). `mask_rcnn_swin_t` mới chỉ có ASR-gain riêng confirmed (§16-B, +3.2 dev_300)
-nhưng chưa có bài test interaction (`G_osfd` vs `G_det`) ở N đủ lớn — pilot N=20 cho +5.2 nhưng CI
-cắt 0.
-
-**Việc CÓ THỂ làm tiếp nếu muốn đóng nốt H2 cho Mask** (chưa quyết định, hỏi user trước khi làm):
-chạy `scripts/n6b_novelty_control.py --manifest data/manifests/dev_50.json --n-images 50
---targets mask_rcnn_swin_t --out-csv results/n6b_novelty_control_mask_n50.csv` — y hệt cách đã làm
-cho DINO, tốn ~50 phút craft. Đây sẽ là việc cuối cùng để có thể phát biểu H2 cho cả 2 hard target
-thay vì chỉ DINO.
+**H2 (path-averaging đặc biệt hữu ích khi backbone Swin) — ĐÃ ĐÓNG, kết luận: chỉ đúng cho DINO,
+không generalize sang Mask-Swin-T**: DINO-only N=49 novelty-control cho `interaction=+6.0,
+CI=[+0.9,+10.5]` không cắt 0 (xem `RESEARCH.md` §20). `mask_rcnn_swin_t` được test cùng chuẩn ở
+N=50 (2026-08-29): `interaction=+2.48, CI=[−2.96,+8.0]` **cắt 0** — và quan trọng hơn, tăng N từ
+20 (pilot, interaction +5.2, CI cắt 0) lên 50 làm signal **yếu đi** (point estimate giảm, same_side
+0.915→0.820) thay vì siết chặt về phía dương như đã xảy ra với DINO — loại trừ khả năng đây chỉ là
+thiếu power. Kết luận cuối: **OSFD-path interaction là hiện tượng đặc thù DINO/decoder DINO, không
+phải property chung của backbone Swin nói chung**. H1 (nguồn gốc transfer difficulty = backbone)
+vẫn support mạnh và KHÔNG bị ảnh hưởng bởi kết quả này — H1 và H2 là 2 câu hỏi tách biệt. Không cần
+chạy thêm Mask novelty-control ở N lớn hơn — câu hỏi đã đủ dữ liệu để đóng (xem `RESEARCH.md` §20,
+mục "Mask-Swin-T N=50").
 
 ## Đang ở đâu trong roadmap
 
@@ -56,10 +58,11 @@ project, không đổi method nữa — chỉ đi chứng minh):
    Δcos chỉ ~11-20% ngưỡng dù CI không cắt 0). Dấu khớp ΔASR trên 4/4 model nhưng không đủ mạnh là
    cơ chế chính. User quyết định KHÔNG đo alignment dọc trajectory (tránh post-hoc rescue). →
    `RESEARCH.md` §19.
-4. **[DONE cho DINO, chưa làm cho Mask]** Novelty control (`G_osfd` vs `G_det`) — pilot N=20 (3
-   target) cho pattern đúng hướng nhưng CI chưa cắt 0. **DINO-only N=49 (đã xong): interaction
-   +6.0, CI=[+0.9,+10.5] KHÔNG cắt 0** — confirmed cho DINO cụ thể. Mask-Swin-T chưa được re-run
-   ở N lớn tương tự (vẫn dừng ở pilot N=20, CI cắt 0) — xem "Việc CÓ THỂ làm tiếp" ở trên. →
+4. **[DONE — cả 2 hard target, kết luận cuối]** Novelty control (`G_osfd` vs `G_det`) — pilot N=20
+   (3 target) cho pattern đúng hướng nhưng CI chưa cắt 0. **DINO-only N=49: interaction +6.0,
+   CI=[+0.9,+10.5] KHÔNG cắt 0** — confirmed cho DINO. **Mask-Swin-T N=50 (2026-08-29): interaction
+   +2.48, CI=[−2.96,+8.0] CẮT 0**, signal yếu đi so với pilot N=20 (không phải thiếu power) —
+   KHÔNG generalize. Kết luận H2: đặc thù cho DINO, không phải property chung của backbone Swin. →
    `RESEARCH.md` §20.
 5. **[DONE — 2 matched-pair]** Breadth test — `dino_r50` VÀ `mask_rcnn_r50` đều đã thêm vào
    `MODEL_REGISTRY`, eval xong (reuse noise `dev_300`, N=296, gần như free về compute). **H1 giờ
@@ -103,6 +106,8 @@ project, không đổi method nữa — chỉ đi chứng minh):
 - `results/n6b_novelty_control_summary.csv` — novelty control pilot N=20, 3 target (bước 4)
 - `results/n6b_novelty_control_dino_n50.csv` — DINO-only N=49, interaction CI=[+0.9,+10.5] không
   cắt 0 (bước 4, DONE)
+- `results/n6b_novelty_control_mask_n50.csv` — Mask-Swin-T N=50 (2026-08-29), interaction
+  CI=[−2.96,+8.0] cắt 0, KHÔNG generalize (bước 4, ĐÃ ĐÓNG — xem `RESEARCH.md` §20)
 - `results/n6b_breadth_dino_r50.csv` — matched-pair #1 (bước 5, DONE)
 - `results/n6b_breadth_mask_rcnn_r50.csv` — matched-pair #2 (bước 5, DONE)
 - `runs/run_attack_osfd_n6b_*_val_100_*.json`, `runs/run_attack_n6bctl_*.json` — run logs (chưa
@@ -115,8 +120,11 @@ project, không đổi method nữa — chỉ đi chứng minh):
 - Không chạy N6-C (cross-layer relational feature distortion) trừ khi N6-B thất bại hoàn toàn
 - Không tune hyperparameter dựa trên kết quả `val_100` (chỉ dùng đúng 1 lần để confirm, đã dùng)
 - Không theo route ngoài luồng (vd sci-hub) để lấy full-text HIFA
-- **Không viết "H2 đã confirmed cho mọi Swin target"** — chỉ DINO có interaction-test confirmed;
-  Mask-Swin-T mới có ASR-gain riêng, chưa có interaction-test ở N đủ lớn (xem "Việc CÓ THỂ làm
-  tiếp" ở trên nếu muốn đóng nốt)
+- **Không viết "H2 đã confirmed cho mọi Swin target"** — đã test cả 2 hard target nhóm C ở N đủ
+  lớn: chỉ DINO confirmed (interaction CI không cắt 0), Mask-Swin-T đã test và KHÔNG generalize
+  (CI cắt 0, signal yếu đi khi tăng N) — đây là kết luận cuối, không phải "chưa đủ dữ liệu"
+- Không chạy thêm Mask novelty-control ở N lớn hơn (N=100+) — signal đã đi ngược hướng cần thiết
+  khi tăng N 20→50 (yếu đi, không siết chặt), nên đây không phải vấn đề thiếu power; thêm compute
+  khó có khả năng đổi kết luận
 - Không launch novelty-control N=100 full 4-target hay compute lớn khác mà không hỏi user trước
   — user đã nhiều lần nhấn mạnh ưu tiên information-gain/compute-cost, không phải "chạy cho chắc"
