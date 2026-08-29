@@ -5,12 +5,14 @@ không cần đọc lại toàn bộ `RESEARCH.md` từ đầu. `RESEARCH.md` v�
 mọi kết quả nghiên cứu (đặc biệt §16-§21 cho phiên này) — file này chỉ tóm tắt điều hướng +
 engineering context không nằm trong journal.
 
-**Cập nhật lần cuối**: 2026-08-29. Việc còn treo của lần dừng trước (Mask-Swin-T novelty-control
-N=50, để đóng nốt H2 cho cả 2 hard target nhóm C) **đã xong — KHÔNG generalize** (xem "Trạng thái
-hiện tại"). Roadmap "prove" cho N6-B giờ coi như đã đóng hoàn toàn (không còn mục nào "open" ở bước
-1-5). Chưa có việc mới được user chốt cho phiên tiếp theo — đọc phần "Trạng thái hiện tại" bên dưới
-rồi hỏi user muốn đi hướng nào tiếp (đừng tự launch thêm compute lớn mà không hỏi, đúng tinh thần
-thận trọng đã giữ xuyên suốt).
+**Cập nhật lần cuối**: 2026-08-29. Roadmap "prove" 5-bước cho N6-B đã đóng hoàn toàn (xem mục dưới).
+Sau đó, project chuyển sang giai đoạn "paper closure" theo đề nghị của user: (1) final baseline
+table (MI-FGSM/OSFD/N6-B path-M3, lắp từ dữ liệu sẵn có, 0 compute mới — chưa ghi vào
+`RESEARCH.md`, chỉ trình bày trong hội thoại) rồi (2) **compute-matched control — ĐÃ CHẠY, GO cho
+DINO** (xem "Trạng thái hiện tại" và `RESEARCH.md` §22). Đây là compute-experiment cuối cùng user
+chủ định chạy trước khi chuyển hẳn sang final paper comparison/writing — **không launch thêm
+compute lớn** trừ khi final baseline review phát hiện lỗ hổng bắt buộc phải lấp (vd MI-FGSM ở
+`dev_300` để đồng nhất N, đã được user cân nhắc và quyết định KHÔNG làm — xem "Việc KHÔNG làm").
 
 ## Trạng thái hiện tại (quan trọng nhất, đọc trước)
 
@@ -41,6 +43,18 @@ vẫn support mạnh và KHÔNG bị ảnh hưởng bởi kết quả này — H
 chạy thêm Mask novelty-control ở N lớn hơn — câu hỏi đã đủ dữ liệu để đóng (xem `RESEARCH.md` §20,
 mục "Mask-Swin-T N=50").
 
+**Compute-matched control (objection "N6-B thắng chỉ vì 3x gradient evaluation, không phải path
+structure") — ĐÃ ĐÓNG, GO cho DINO**: 3-way lockstep mới (`osfd_local`/`rrb_avg_k3`/`path_m3`,
+script `scripts/n6cm_compute_matched_pilot.py`) — pilot N=20 cho DINO point estimate +8.0 nhưng CI
+chạm 0 (chưa decisive); confirmation N=49 (2026-08-29): `path−avg` trên DINO = **+6.77, CI=
+[+2.67,+11.15] KHÔNG cắt 0** → đạt GO theo tiêu chí pre-registered (≥+3 và CI>0). Kết luận: gain
+của N6-B trên DINO không giải thích được chỉ bằng "nhiều gradient evaluation hơn" — cấu trúc path
+đóng góp thật, vượt trên naive K=3 RRB averaging cùng compute. `yolox_l` đảo chiều từ tín hiệu sạch
+ở N=20 (+6.93, CI không cắt 0) sang cắt 0 ở N=49 (+3.19) — không bền, không dùng làm evidence.
+`mask_rcnn_swin_t` inconclusive cả 2 N. `rcg_avg` (Phase M cũ) bị loại khỏi evidence chính do
+không khớp `rrb_avg_k3` (N6-A) trên cùng ảnh — nghi ngờ là implementation/RNG artifact riêng của
+script đó. Theo stopping rule đã chốt trước khi chạy, **không scale N=300** — xem `RESEARCH.md` §22.
+
 ## Đang ở đâu trong roadmap
 
 Roadmap "prove" đã thống nhất với user (N6-B = path-integrated OSFD gradient, candidate mạnh nhất
@@ -68,6 +82,10 @@ project, không đổi method nữa — chỉ đi chứng minh):
    `MODEL_REGISTRY`, eval xong (reuse noise `dev_300`, N=296, gần như free về compute). **H1 giờ
    support bởi 2 pair độc lập** (xem bảng ở trên). Không cần thêm matched-pair thứ 3 trừ khi có lý
    do cụ thể mới. → `RESEARCH.md` §21.
+6. **[DONE — thêm sau roadmap 5-bước, GO cho DINO]** Compute-matched control — pilot N=20 rồi
+   confirmation N=49, 3-way lockstep `osfd_local`/`rrb_avg_k3`/`path_m3`. DINO
+   `path−avg=+6.77, CI=[+2.67,+11.15]` không cắt 0 → loại trừ "compute nhiều hơn" như lời giải
+   thích thay thế cho gain của N6-B. → `RESEARCH.md` §22.
 
 ## Engineering notes quan trọng (không nằm trong RESEARCH.md, dễ quên/redo nhầm)
 
@@ -98,6 +116,18 @@ project, không đổi method nữa — chỉ đi chứng minh):
     craft lại) — đã dùng cho cả `dino_r50` và `mask_rcnn_r50`, có thể tái dùng cho matched-pair
     thứ 3 trong tương lai nếu cần (thêm ModelSpec + checkpoint rồi gọi script với `--models
     <tên>`).
+- **1 script mới thêm ở phiên compute-matched control (2026-08-29)**:
+  - `scripts/n6cm_compute_matched_pilot.py` — 3-way lockstep `osfd_local`/`rrb_avg_k3`/`path_m3`
+    trong CÙNG 1 hàm craft (không compose lại 2 hàm cũ `craft_paired_local_path`/
+    `craft_paired_avg_cr` vì mỗi hàm tự quản lý RNG snapshot riêng theo step, ghép lại sẽ phá vỡ
+    lockstep) — 1 RNG snapshot/step, restore riêng trước draw của local, trước draw ĐẦU của avg
+    (draw 2-3 của avg advance tự nhiên, đúng bản chất "K view độc lập"), và trước MỖI draw của
+    path (path chia sẻ đúng 1 augmentation instance qua cả 3 λ, theo thiết kế gốc
+    `n6b_path_pilot.py`). Default models cho pilot: `{faster_rcnn_r50, yolox_l,
+    mask_rcnn_swin_t, dino_swin_l}` (giống N6-A/RCG, không phải full 7-model registry).
+    `--out-csv` cần chỉ định riêng nếu chạy nhiều N (mặc định ghi đè
+    `results/n6cm_compute_matched_pilot_summary.csv`) — N=49 đã dùng
+    `--out-csv results/n6cm_compute_matched_pilot_n50.csv` để giữ cả 2 file.
 
 ## File kết quả liên quan (phiên này)
 
@@ -110,8 +140,13 @@ project, không đổi method nữa — chỉ đi chứng minh):
   CI=[−2.96,+8.0] cắt 0, KHÔNG generalize (bước 4, ĐÃ ĐÓNG — xem `RESEARCH.md` §20)
 - `results/n6b_breadth_dino_r50.csv` — matched-pair #1 (bước 5, DONE)
 - `results/n6b_breadth_mask_rcnn_r50.csv` — matched-pair #2 (bước 5, DONE)
-- `runs/run_attack_osfd_n6b_*_val_100_*.json`, `runs/run_attack_n6bctl_*.json` — run logs (chưa
-  chạy `scripts/gen_experiment_log.py` để cập nhật `EXPERIMENTS.md` — tự sinh, không sửa tay)
+- `results/n6cm_compute_matched_pilot_summary.csv` — compute-matched control pilot N=20 (bước 6,
+  promising nhưng chưa decisive trên DINO)
+- `results/n6cm_compute_matched_pilot_n50.csv` — compute-matched control confirmation N=49
+  (bước 6, DONE — GO cho DINO, `path−avg=+6.77, CI=[+2.67,+11.15]` không cắt 0)
+- `runs/run_attack_osfd_n6b_*_val_100_*.json`, `runs/run_attack_n6bctl_*.json`,
+  `runs/run_attack_osfd_n6cm_*.json` — run logs (`EXPERIMENTS.md` đã regenerate, tự sinh, không
+  sửa tay)
 
 ## Việc KHÔNG làm (đã quyết định rõ, tránh redo/tranh luận lại)
 
@@ -128,3 +163,12 @@ project, không đổi method nữa — chỉ đi chứng minh):
   khó có khả năng đổi kết luận
 - Không launch novelty-control N=100 full 4-target hay compute lớn khác mà không hỏi user trước
   — user đã nhiều lần nhấn mạnh ưu tiên information-gain/compute-cost, không phải "chạy cho chắc"
+- Không chạy MI-FGSM ở `dev_300`/`val_100` để "làm đẹp" bảng final baseline — user quyết định
+  MI-FGSM ở `dev_50` N=49 đã đủ vai trò (chứng minh gap task-loss≪feature-attack), thêm N không
+  đổi kết luận, information gain thấp so với chi phí (~50 phút)
+- Không scale compute-matched control (`n6cm_compute_matched_pilot.py`) lên N=300 — đã đạt GO
+  sạch ở N=49 theo đúng tiêu chí pre-registered (point estimate ≥+3 và CI>0 trên DINO), stopping
+  rule đã chốt trước khi chạy nói rõ không cần N=300 trừ khi final table cần precision cao hơn
+- Không dùng `rcg_avg` (Phase M, `results/m_rcg_pilot_summary.csv`) làm evidence cho câu hỏi
+  compute-matched nữa — không khớp `rrb_avg_k3` (N6-A) trên cùng ảnh dù cùng config danh nghĩa,
+  nghi ngờ là RNG/implementation artifact riêng của script đó (xem `RESEARCH.md` §22)

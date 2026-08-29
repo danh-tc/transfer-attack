@@ -1450,3 +1450,86 @@ cắt 0, signal yếu đi khi N tăng từ 20→50 chứ không siết chặt �
 power). Kết luận cuối cho H2: **OSFD-path interaction là hiện tượng đặc thù cho DINO/decoder DINO,
 không phải property chung của mọi target backbone Swin** — tách bạch rõ khỏi H1 (nguồn gốc transfer
 difficulty), vốn vẫn support rộng trên cả 2 pair.
+
+## 22. Compute-matched control: path-M3 so với naive K=3 RRB averaging — GO cho DINO
+
+Câu hỏi objection mạnh nhất còn mở cho N6-B: `path_m3` transfer tốt hơn `osfd_local` vì **cấu trúc
+path clean→current**, hay chỉ vì dùng **nhiều gradient evaluation hơn** (M=3 forward/backward mỗi
+step thay vì 1) — tức là một dạng Monte-Carlo variance reduction thuần túy, không đặc thù path?
+Project đã có 2 datapoint cũ liên quan (`rcg_avg` — Phase M, `rrb_avg_k3` — N6-A) đóng vai trò
+"K=3 naive averaging, cùng compute" nhưng **không đồng nhất với nhau** trên DINO (rcg_avg +11.0 vs
+rrb_avg_k3 +3.0, cùng 20 ảnh, cùng config danh nghĩa) — không đủ sạch để dùng làm evidence, vì cả
+hai là 2 script riêng biệt, không lockstep-pair trực tiếp với `path_m3`.
+
+**Thiết kế mới** (script `scripts/n6cm_compute_matched_pilot.py`): 3-way lockstep trên cùng 1 ảnh —
+`osfd_local` (1 draw/step, λ=1), `rrb_avg_k3` (K=3 draw độc lập/step, λ=1, gradient = trung bình —
+đúng compute 3x như path), `path_m3` (M=3 draw tại λ=1/3,2/3,1, chia sẻ đúng 1 augmentation draw
+qua cả 3 λ, theo đúng thiết kế `n6b_path_pilot.py`). Một RNG snapshot được chụp mỗi step và phục
+hồi riêng trước draw của `osfd_local`, trước draw đầu của `rrb_avg_k3`, và trước MỖI draw của
+`path_m3` — khiến `osfd_local`, draw-đầu của `rrb_avg_k3`, và cả 3 draw của `path_m3` cùng thấy
+**đúng 1 augmentation instance** ở mỗi step; chỉ draw thứ 2-3 của `rrb_avg_k3` là random-draw độc
+lập thêm (không thể loại bỏ mà không phá vỡ chính cơ chế đang test). Đây là pairing chặt hơn cả 2
+tiền lệ cũ (N6-A's `osfd_k1` chỉ khớp seed ở step 1, không lockstep-restore mỗi step; so 2 script
+riêng biệt như `rcg_avg` vs `rrb_avg_k3` thì không pairing gì cả).
+
+Primary quantity pre-registered: `delta_path_vs_avg = ASR(path_m3) - ASR(rrb_avg_k3)` trên
+`dino_swin_l`, với paired image-cluster bootstrap 95% CI (quy ước giống N4/N6-B). GO criterion
+(chốt trước khi chạy N=49): point estimate ≥ +3 **và** CI không cắt 0; CI chạm/cắt 0 dù point
+estimate dương → inconclusive, dừng, không scale N=300 để rescue; effect <+3 hoặc đổi dấu → NO-GO.
+`yolox_l`/`mask_rcnn_swin_t` chỉ secondary, không dùng để cứu quyết định trên DINO.
+
+**Pilot N=20** (`results/n6cm_compute_matched_pilot_summary.csv`): tín hiệu đúng hướng nhưng chưa
+decisive.
+
+| model | osfd_local | rrb_avg_k3 | path_m3 | path−avg | 95% CI | same_side |
+|---|---|---|---|---|---|---|
+| faster_rcnn_r50 (surrogate) | 96.81 | 97.87 | 96.81 | −1.06 | [−3.88,0.0] cắt 0 | 0.627 |
+| yolox_l | 82.18 | 78.22 | 85.15 | +6.93 | [+1.80,+12.86] không cắt 0 | 1.000 |
+| dino_swin_l | 27.0 | 30.0 | 38.0 | **+8.0** | [0.0,+16.3] chạm biên 0 | 0.981 |
+| mask_rcnn_swin_t | 80.41 | 81.44 | 82.47 | +1.03 | [−5.06,+7.53] cắt 0 | 0.687 |
+
+Điểm quan trọng nhất ở N=20: DINO point estimate +8.0 — vượt xa ngưỡng +3, nhưng CI chạm đúng 0.0 —
+"promising nhưng underpowered", không đạt GO sạch. `yolox_l` ở N=20 cho tín hiệu sạch nhất
+(+6.93, CI không cắt 0) — sẽ không bền khi lên N=49 (xem bên dưới).
+
+**Self-check xác nhận implementation đúng**: `path_m3 − osfd_local` trên DINO ở N=20 = **+11.0**,
+khớp tuyệt đối với con số gốc `n6b_path_pilot.py` đã báo cáo ở §16-B (N=20, cùng manifest). Đồng
+thời `rrb_avg_k3 − osfd_local` trên DINO = **+3.0**, khớp với con số gốc N6-A (§16), **không khớp**
+`rcg_avg`'s +11.0 (Phase M, §9) — củng cố nghi ngờ `rcg_avg` là artifact của một implementation
+riêng biệt, không đáng tin làm compute-matched evidence; từ đây **loại `rcg_avg` khỏi evidence
+chính** cho câu hỏi compute-matched.
+
+**Confirmation N=49** (`results/n6cm_compute_matched_pilot_n50.csv`, cùng script/config, không đổi
+gì):
+
+| model | osfd_local | rrb_avg_k3 | path_m3 | path−avg | 95% CI | same_side |
+|---|---|---|---|---|---|---|
+| faster_rcnn_r50 (surrogate) | 96.85 | 98.20 | 96.40 | −1.80 | [−3.85,−0.40] không cắt 0 (âm) | 0.986 |
+| yolox_l | 72.51 | 70.52 | 73.71 | +3.19 | [−0.72,+6.90] cắt 0 | 0.960 |
+| **dino_swin_l** | 26.69 | 27.49 | 34.26 | **+6.77** | **[+2.67,+11.15]** KHÔNG cắt 0 | 0.999 |
+| mask_rcnn_swin_t | 70.66 | 71.07 | 74.38 | +3.31 | [−0.47,+7.66] cắt 0 (sát biên) | 0.965 |
+
+**Đọc kết quả, theo đúng khung pre-registered**:
+
+- **DINO — GO**: point estimate +6.77 (≥+3), CI [+2.67,+11.15] **không cắt 0**. Tín hiệu N=20
+  "promising nhưng underpowered" (+8.0, CI chạm 0) đã siết chặt về phía dương khi tăng N — đúng
+  pattern đã thấy với DINO ở novelty-control (§20: N=20 CI cắt 0 → N=49 CI không cắt 0).
+- **yolox_l — đảo chiều đáng lưu ý**: N=20 từng là tín hiệu sạch nhất (+6.93, CI không cắt 0), N=49
+  co lại còn +3.19 và **CI cắt 0** — tín hiệu N=20 không bền, minh chứng cho lý do không nên kết
+  luận sớm từ N nhỏ (đối lập với DINO, nơi N=20→N=49 đi đúng hướng củng cố).
+- **mask_rcnn_swin_t**: +3.31 (đạt ngưỡng biên độ) nhưng CI cắt 0 sát mép — secondary, không gate
+  quyết định theo thỏa thuận trước khi chạy.
+- **surrogate**: −1.80, CI không cắt 0 (âm) — khớp pattern "gần ceiling → path hơi kém hơn avg" đã
+  thấy xuyên suốt project ở mọi model gần ceiling (không phải bằng chứng chống lại mechanism).
+
+**Kết luận (đạt GO theo đúng tiêu chí đã chốt trước khi chạy)**:
+
+> Under matched gradient-computation budget, path-integrated OSFD outperforms naive multi-view
+> gradient averaging on the hardest DINO-Swin target (+6.77 ASR, 95% CI [+2.67,+11.15]),
+> indicating that its gain cannot be explained solely by additional gradient evaluations — the
+> clean→current path structure contributes beyond naive K=3 RRB averaging.
+
+Theo đúng stopping rule đã đặt trước ("nếu N≈50 confirm thì không cần N=300 trừ khi final table cần
+precision cao hơn") — **dừng compute ở đây cho control này**. Đây là mảnh evidence mạnh thứ 3 cho
+N6-B (sau DINO held-out confirm ở §16-B và DINO novelty-control interaction ở §20), và là mảnh duy
+nhất trực tiếp loại trừ "compute nhiều hơn" như lời giải thích thay thế.
