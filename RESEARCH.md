@@ -1533,3 +1533,449 @@ Theo đúng stopping rule đã đặt trước ("nếu N≈50 confirm thì khôn
 precision cao hơn") — **dừng compute ở đây cho control này**. Đây là mảnh evidence mạnh thứ 3 cho
 N6-B (sau DINO held-out confirm ở §16-B và DINO novelty-control interaction ở §20), và là mảnh duy
 nhất trực tiếp loại trừ "compute nhiều hơn" như lời giải thích thay thế.
+
+## 23. E6: Backbone Adversarial Response Coupling — mechanism candidate cho H1, STRONG GO
+
+Sau §21 (H1 confirmed bởi 2 matched-pair độc lập: đổi Swin→R50 giữ nguyên head làm ASR nhảy lên
+~99% cả 2 lần), câu hỏi còn để ngỏ là **tại sao** backbone/representation family lại là nguồn gốc
+gap, không phải chỉ **rằng** nó là nguồn gốc. Hai lời giải thích đơn giản nhất đã bị loại: `‖ΔF‖`
+tại backbone (E1, §8) không giải thích được transfer ordering (giữa 2 target Swin, model bị phá
+backbone *ít hơn* lại có mAP_drop *cao hơn*); và instantaneous gradient cosine với true gradient
+của target (§19) có tín hiệu đúng dấu nhưng biên độ chỉ bằng 11-20% ngưỡng mechanism đã đặt.
+
+**Hypothesis mới** (không phải "dùng CKA/feature-alignment/subspace" — đó chỉ là công cụ đo,
+không phải novelty): transferability phụ thuộc vào việc hai backbone có **phản ứng cùng hình dạng**
+trước cùng một perturbation hay không — gọi là **Backbone Adversarial Response Coupling**. Novelty
+nằm ở việc **disentangle và định lượng một mechanism của cross-backbone transfer trong object
+detection dưới matched-head controls** (khác `‖ΔF‖`/gradient-cosine — cả hai đo "phá được bao
+nhiêu"/"đúng hướng đến đâu" tại backbone của chính target; response coupling đo "phản ứng của
+target có giống phản ứng của surrogate hay không", so sánh **shape** chứ không phải magnitude).
+
+**Thiết kế** (script mới `scripts/e6_response_coupling.py`, chỉ forward pass, không backward):
+với mỗi model `m`, mỗi ảnh `i`: `ΔF_m,i = F_m(x_i+δ_i) - F_m(x_i)`, mỗi backbone stage được
+adaptive-avg-pool về lưới không gian cố định (`--pool-size 7`) rồi concat qua mọi stage thành 1
+vector/ảnh, L2-normalize theo từng ảnh (`ΔF_hat = ΔF/(‖ΔF‖+ε)`, để một vài ảnh có magnitude bất
+thường không lấn át). Similarity giữa surrogate và target đo bằng **linear CKA trong Gram
+(sample×sample) space** (Kornblith et al. 2019) — chọn đúng vì Gram matrix chỉ cần cùng N ảnh,
+không cần cùng channel-width/spatial-size/số-stage giữa ResNet/Swin/Darknet, nên so sánh được
+xuyên kiến trúc mà không cần project về chung 1 chiều. `C_response(s,t) = CKA(Gram(ΔF_hat_s),
+Gram(ΔF_hat_t))` là quantity chính; `S_clean(s,t) = CKA(Gram(F_hat_s(x)), Gram(F_hat_t(x)))` (clean
+feature, không nhiễu) là control để tách "hai backbone vốn giống nhau sẵn" khỏi "hai backbone phản
+ứng giống nhau trước đúng nhiễu này". Hai matched-pair từ §21 (`dino_r50` vs `dino_swin_l`,
+`mask_rcnn_r50` vs `mask_rcnn_swin_t`) là test quan trọng nhất vì giữ cố định head/decoder, cô lập
+đúng biến số backbone.
+
+**Lưu ý về noise**: môi trường chạy lại không còn giữ noise gốc đã dùng cho §16-22 (`results/`
+gitignored, không commit) — noise cho §23 được **recraft mới cùng config y hệt** (đọc từ
+`runs/*.json`: epsilon=5, alpha=1, steps=100, mu=1, k=3, RRB on) trên `faster_rcnn_r50`, không
+phải cùng 1 file tensor. Verify: ASR/mAP_drop trên noise mới khớp noise cũ trong biên ~1 điểm (vd
+`dino_swin_l` 33.6% mới vs 33.0-33.2% cũ, `mask_rcnn_swin_t` 68.1% mới vs 67.8% cũ) — đủ để tin
+noise mới đại diện đúng cho cùng attack, không phải một biến thể khác.
+
+**Bug bắt được trước khi tin CI**: bootstrap resample-with-replacement chuẩn (cùng quy ước với
+`paired_bootstrap_asr_delta` ở N6-B/N4) áp trực tiếp lên thống kê Gram/CKA cho CI **thiên lệch có
+hệ thống** — verify bằng synthetic test (data tương quan giả lập, CKA=0.894): with-replacement
+bootstrap đặt chính point estimate **ngoài** CI 95% của nó ([0.902,0.936]), vì ảnh trùng lặp do
+resample có similarity=1 tuyệt đối với chính nó, thổi phồng Gram entries một cách hệ thống chứ
+không phải nhiễu. Sửa bằng **subsampling không hoàn lại** (m=80% N/draw, chuẩn cho kernel/
+U-statistic dưới resampling) — cùng synthetic test, CI phục hồi chứa đúng point estimate
+([0.892,0.912]). Toàn bộ CI báo cáo dưới đây dùng phương án đã sửa. Đồng thời tối ưu `center_gram`
+từ O(n³) (`H@K@H` matmul tường minh) sang O(n²) (công thức row/col/grand-mean, verify numerically
+identical, diff ~1e-14) — không đổi kết quả, chỉ tránh CI-computation trở thành cost chính ở N lớn.
+
+**GO criteria đã pre-register**: Strong GO cần đồng thời (1) cả 2 matched-pair đúng hướng
+`C_response(R50) > C_response(Swin)`; (2) bootstrap CI của delta không cắt 0 cho cả 2 pair; (3)
+`corr(C_response, ASR) > 0` trên toàn bộ target; (4) `corr(C_response,ASR) > corr(S_clean,ASR)`
+(response coupling giải thích transfer tốt hơn hẳn việc hai model chỉ đơn thuần có clean
+representation giống nhau). Weak GO: cả 2 pair đúng hướng nhưng (2)-(4) chưa sạch. NO-GO: một pair
+sai hướng, hoặc `corr(C_response,ASR)≈0`, hoặc `S_clean` giải thích transfer tốt ngang/hơn
+`C_response` — nếu NO-GO, **không đổi sang biến thể CKA/subspace khác để cứu hypothesis**.
+
+**Kết quả — chạy ở 3 quy mô N (49→120→296, tái dùng `dev_50`/`dev_300`) và 2 cách pool
+(mean/RMS) làm sensitivity check trước khi cam kết compute lớn** (đề nghị của user, thay vì scale
+thẳng lên `dev_300`): tín hiệu không những giữ dấu mà **mạnh dần theo N** — đúng chữ ký của effect
+thật, khác hẳn mọi lần trước trong project mà tín hiệu pilot thường yếu đi hoặc dao động khi tăng N
+(vd Mask-Swin-T novelty-control ở §20, N6-B0's `mask_rcnn_swin_t`/`yolox_l` ở §22).
+
+| N (ảnh) | pool | Δ C_response DINO (R50−Swin) | 95% CI | Δ Mask-RCNN | 95% CI | corr(C_response,ASR) | corr(S_clean,ASR) |
+|---|---|---|---|---|---|---|---|
+| 49 | mean | +0.0068 | [+0.0001,+0.0104] | +0.0254 | [+0.0185,+0.0240] | +0.438 | +0.115 |
+| 120 | mean | +0.0218 | [+0.0130,+0.0234] | +0.0447 | [+0.0370,+0.0424] | +0.515 | −0.039 |
+| **296** | **mean** | **+0.0362** | **[+0.0254,+0.0372]** | **+0.0645** | **[+0.0574,+0.0632]** | **+0.504** | **−0.051** |
+| 49 | rms | +0.0505 | [+0.0250,+0.0601] | +0.0603 | [+0.0478,+0.0608] | +0.822 | +0.398 |
+| 120 | rms | +0.0531 | [+0.0372,+0.0594] | +0.1033 | [+0.0846,+0.1073] | +0.765 | +0.203 |
+| **296** | **rms** | **+0.1055** | **[+0.0854,+0.1098]** | **+0.1302** | **[+0.1147,+0.1364]** | **+0.836** | **+0.193** |
+
+Sign của cả 2 matched-pair **không đổi một lần nào** qua mọi N, mọi pool mode, mọi
+`bootstrap_frac` (0.7/0.8/0.9) đã thử (xem `results/e6_response_coupling*.csv` cho số đầy đủ từng
+lần chạy).
+
+**Bảng chính (N=296, mean-pool, `results/e6_response_coupling_dev300.csv`)**:
+
+| target | group | S_clean | C_response | ASR | mAP_drop_pct |
+|---|---|---|---|---|---|
+| fcos_r50 | A | 0.963 | 0.926 | 97.5 | 98.7 |
+| deformable_detr | A | 0.896 | 0.883 | 99.1 | 99.8 |
+| yolov3_d53 | B | 0.920 | 0.915 | 83.3 | 90.8 |
+| yolox_l | B | 0.931 | 0.912 | 69.3 | 76.1 |
+| mask_rcnn_swin_t | C | 0.976 | 0.929 | 68.1 | 77.8 |
+| dino_swin_l | C | 0.909 | 0.815 | 33.6 | 27.4 |
+| dino_r50 | D | 0.825 | 0.851 | 99.7 | 99.8 |
+| mask_rcnn_r50 | D | 0.998 | 0.993 | 99.1 | 99.8 |
+
+**Đọc kết quả**: cả 4 tiêu chí Strong GO đạt ở N=296, cả 2 pool mode. Đáng chú ý nhất là hướng đi
+của `corr(S_clean,ASR)` theo N — từ +0.115 (N=49) tụt xuống **âm nhẹ** (−0.051 ở N=296, mean-pool)
+— nghĩa là ở quy mô đủ lớn, việc hai backbone có clean representation giống nhau **không còn dự
+đoán được gì** về transfer (thậm chí hơi ngược), trong khi `C_response` giữ nguyên tín hiệu dương
+ổn định xuyên suốt. Đây là bằng chứng khá sạch rằng cái quan trọng không phải "hai backbone vốn đã
+giống nhau" mà là "hai backbone phản ứng giống nhau trước đúng perturbation này" — đúng tinh thần
+hypothesis đặt ra, không phải một proxy gián tiếp của representation similarity thông thường.
+
+**Audit bổ sung: subsampling CI (m<n) có đáng tin ở đúng N=296 không?** Raw percentile CI từ
+m-out-of-n subsampling (m=80% N) ước lượng sampling distribution của thống kê ở cỡ mẫu **m**, không
+phải **n** đầy đủ — thiếu hệ số rescale `sqrt(m/n)` theo lý thuyết subsampling (Politis & Romano),
+nên không nên gọi thẳng là CI cho thống kê ở N=296. Sửa bằng **delete-1 jackknife** trực tiếp trên
+statistic `θ = C_response(R50) − C_response(Swin)` (tái dùng đúng Gram matrix đã cache, không
+forward lại): `θ_(-i)` với mỗi ảnh bị bỏ, `SE_jack = sqrt((n-1)/n · Σ(θ_(-i)−θ̄)²)`,
+`CI = θ ± 1.96·SE_jack`. Script thêm `jackknife_matched_pair_delta()` +
+`--save-gram-npz` (lưu Gram matrix ra `.npz` để audit sau không cần re-extract).
+
+| pool | pair | θ (point) | SE_jack | 95% CI (θ±1.96·SE) | bias_jack |
+|---|---|---|---|---|---|
+| mean | dino | +0.0362 | 0.0066 | [+0.0233,+0.0491] | −0.0218 |
+| mean | mask_rcnn | +0.0645 | 0.0032 | [+0.0582,+0.0708] | −0.0179 |
+| rms | dino | +0.1055 | 0.0131 | [+0.0799,+0.1312] | −0.0345 |
+| rms | mask_rcnn | +0.1302 | 0.0117 | [+0.1073,+0.1531] | −0.0196 |
+
+Cả 4 trường hợp CI loại trừ 0 rõ ràng ở N=296 — kết luận GO **giữ vững** dưới phương pháp CI chặt
+hơn. Nhưng làm audit tương tự ở **N=49** cho kết quả khác: jackknife CI của DINO **cắt 0**
+([−0.0051,+0.0186]), trong khi subsampling ở N=49 báo excl-0 rất sát mép (+0.0001 đến +0.0104 tùy
+frac) — xác nhận đúng lo ngại rằng CI subsampling lạc quan hơn thực tế ở N nhỏ; **jackknife chỉ
+đồng thuận GO ở N=296** (quy mô confirm), không phải N=49 (pilot). Đây là narrative sạch: pilot chỉ
+"promising", confirm thật sự đến từ N lớn.
+
+**Giới hạn cần ghi nhận, không dùng để đảo kết luận**: `|bias_jack|/SE_jack` khá lớn ở cả 4 trường
+hợp (1.7×–5.6×) — theo lý thuyết jackknife, tỷ lệ này lớn gợi ý CKA (statistic phi tuyến do có
+centering+normalization) không hoàn toàn "smooth" cho xấp xỉ delete-1, nên `SE_jack` bản thân có
+thể chưa hoàn toàn chính xác. Không đổi hướng kết luận vì bias luôn **âm** ở cả 4 trường hợp (nghĩa
+là θ̄ trung bình các fold thấp hơn θ_full) — nếu bias-correct thì point estimate sẽ dịch xa 0 hơn,
+không lại gần 0. Ghi nhận như limitation của inference cho nonlinear-kernel statistic, không phải
+bằng chứng chống lại effect direction.
+
+**Kết luận — đóng E6, viết ở mức thận trọng (không causal, không claim CI "perfectly calibrated")**:
+
+> Backbone adversarial response coupling is strongly associated with cross-backbone
+> transferability in object detection, and this relationship is more informative than clean
+> representation similarity under matched-head controls. The pattern holds across N=49→120→296,
+> mean/RMS pooling, and multiple subsampling fractions; at N=296, a delete-1 jackknife computed
+> directly on the difference statistic (avoiding the m-out-of-n subsampling rescale question)
+> confirms both matched pairs remain positive with the CI excluding zero. This is the first
+> mechanism candidate in this project's diagnostic chain (after ‖ΔF‖ in E1 and gradient cosine in
+> §19 both failed) that survives a full replication ladder — including a stricter CI method —
+> without weakening. No causal claim is made; C_response is measured, not intervened upon.
+
+**Việc đã làm khác quy trình thường lệ của project (đáng ghi lại)**: (1) lần đầu tiên project chạy
+**sensitivity check 2 trục** (pool mode + bootstrap_frac) *trước khi* scale N, theo đề nghị của
+user — thay vì pilot N nhỏ rồi confirm N lớn như mọi candidate trước (MVC/RCG/DOB/N6-A/N6-B). Cách
+này phát hiện được ngay ở N=49 rằng tín hiệu DINO/mean-pool mấp mé CI=0 (đáng ngờ), nhưng đồng thời
+cho thấy sign không đổi qua pool mode/frac — đúng tín hiệu "promising, đáng scale" trước khi tốn
+compute N=300. (2) Bắt được 1 bug thật (bootstrap-with-replacement bias cho Gram/CKA) mà nếu chạy
+thẳng N=300 rồi mới nhìn CI mới phát hiện, đắt hơn nhiều. (3) Audit lại chính phương pháp CI bằng
+jackknife sau khi có kết quả N=296 — phát hiện subsampling CI ở N=49 lạc quan hơn thực tế, dù không
+đảo kết luận cuối cùng ở N=296.
+
+**Đóng E6** — không chạy thêm sensitivity nào khác cho candidate này. `C_response` là **mechanism
+candidate**, chưa phải method design: cần forward pass qua target thật để tính, dùng được cho
+diagnostic nhưng không dùng được trong vòng lặp attack black-box thật. Bước tiếp theo chuyển sang
+E7 (xem §24) — câu hỏi mới: `C_response` giải thích rất tốt **hướng** transfer trong mỗi matched-pair
+(giữ cố định head), nhưng không tự nó giải thích được vì sao **mức nền ASR khác nhau nhiều đến vậy
+giữa 2 detector head khác nhau khi cùng gắn Swin backbone** — `dino_swin_l` (C_response=0.815,
+ASR=33.6%) so với `mask_rcnn_swin_t` (C_response=0.929, ASR=68.1%): cả 2 chỉ số của Mask đều cao
+hơn DINO, nhưng biên độ chênh lệch ASR (68.1−33.6=34.5 điểm) lớn hơn nhiều so với biên độ chênh
+lệch C_response (0.929−0.815=0.114) — nói cách khác, quan hệ "C_response → ASR" dường như có
+**hệ số/intercept khác nhau tùy detector head**, không phải một hàm số chung cho mọi kiến trúc.
+Đây chính là chỗ downstream pipeline (neck/proposal/decoder riêng của từng head) có thể đóng vai
+trò **khuếch đại hoặc suy giảm** backbone-level coupling theo cách khác nhau giữa DINO và Mask
+R-CNN — câu hỏi E7 muốn trả lời.
+
+**Bước tiếp theo (chưa làm, cần cân nhắc trước khi code)**: đây là **mechanism candidate**, chưa
+phải method design — khác biệt quan trọng với N4/N4b (§14, cũng là finding dương nhưng chuyển hoá
+thành DOB rồi NO-GO). Rào cản cụ thể: `C_response` như định nghĩa hiện tại cần forward pass qua
+chính **target** model để đo — dùng được cho phân tích/diagnostic (đúng vai trò ở đây), nhưng
+**không thể tính trong vòng lặp attack thật** (black-box, không có gradient/feature của target).
+Bất kỳ method nào muốn khai thác finding này cần một proxy chỉ dùng phía surrogate (vd một tập
+surrogate-variant ước lượng "expected response coupling" mà không cần chạm target) — đây chính là
+rào cản mà candidate CRA (§16, loại vì overlap SAA) và hướng "cross-representation vulnerability mà
+không cần witness model" (§10, Phase N mở đầu) đã né tránh. Chưa quyết định thiết kế cụ thể; cần
+scan lại xem có cách nào ước lượng response-coupling chỉ từ phía surrogate (vd qua tập backbone-
+variant nội bộ, giống hướng MVC đã thử — nhưng MVC đã NO-GO ở dạng model-space consistency đơn
+giản, §9) trước khi code pilot.
+
+## 24. E7: Downstream Amplification — NO-GO
+
+**Câu hỏi**: `C_response` (§23) giải thích tốt **hướng** transfer trong mỗi matched-pair (giữ cố
+định head, đổi backbone), nhưng không giải thích được vì sao **mức nền ASR khác nhau nhiều đến vậy
+giữa 2 detector head khi cùng gắn Swin**: `dino_swin_l` (C_response=0.815, ASR=33.6%) vs
+`mask_rcnn_swin_t` (C_response=0.929, ASR=68.1%) — biên độ chênh ASR (34.5 điểm) không tỷ lệ thuận
+đơn giản với biên độ chênh C_response (0.114). Hypothesis: downstream pipeline (neck/proposal/
+decoder riêng mỗi head) khuếch đại hoặc suy giảm backbone-level disturbance khác nhau tùy kiến
+trúc — `Transfer ≈ Backbone Response Coupling + Downstream Amplification`.
+
+**Phát hiện quan trọng trước khi thiết kế: không cần xây instrumentation mới.** `scripts/
+e2_pipeline_attenuation.py` (đã viết từ chuỗi diagnostic E1-E3, §8) **đã có sẵn** đúng phép đo
+per-stage cần cho cả 2 kiến trúc — `measure_mask_rcnn()` (backbone→FPN neck→RPN raw→RoI pooled
+feat→RoI head output, xử lý đúng confound "proposal selection khác nhau giữa clean/adv" bằng cách
+tái dùng proposal chọn trên ảnh clean cho cả 2 forward RoI) và `measure_dino()` (backbone→neck/
+input-proj→encoder memory→decoder hidden-states cuối, dùng trực tiếp `model.pre_transformer`/
+`forward_encoder`/`pre_decoder`/`forward_decoder` — các method nội bộ mmdet's `DINO`/
+`DeformableDETR`, không cần hook mới). Script hiện chỉ chạy cho `mask_rcnn_swin_t` và `dino_swin_l`
+(2 model duy nhất tồn tại lúc viết) — **việc còn lại của E7 chủ yếu là thêm `mask_rcnn_r50` và
+`dino_r50` vào `MEASURERS`**, chạy lại trên `dev_300` (N=296, tái dùng noise đã crafted của §23,
+không craft lại — free compute), rồi định nghĩa + so sánh một quantity "downstream amplification"
+giữa R50 và Swin trong mỗi matched-pair.
+
+**Quantity đề xuất** (chưa chốt, cần bàn trước khi code): `A(model) = mean_rel_l2(final_stage) /
+mean_rel_l2(backbone_stage)` — tỷ lệ relative-L2 distortion giữa stage cuối cùng đo được (RoI head
+output cho Mask-RCNN, decoder hidden-states cuối cho DINO) và stage backbone. `A>1` nghĩa là
+downstream pipeline khuếch đại thêm disturbance đã có ở backbone; `A<1` nghĩa là suy giảm. So sánh
+`A(mask_rcnn_r50)` vs `A(mask_rcnn_swin_t)`, và `A(dino_r50)` vs `A(dino_swin_l)` — nếu backbone
+Swin đi kèm `A` lớn hơn rõ rệt so với R50 (cùng head), đó là bằng chứng downstream amplification là
+một biến số thật, độc lập với response-coupling đã đo ở §23.
+
+**Giới hạn đã biết trước khi chạy (ghi lại từ chính docstring gốc của E2, không phải phát hiện
+mới)**: so sánh giữa 2 HỌ detector khác nhau (Mask-RCNN 5-stage vs DINO 4-stage, đơn vị/dimension
+mỗi stage khác hẳn nhau) chỉ có ý nghĩa **trong nội bộ mỗi họ** (R50 vs Swin, giữ cố định pipeline
+structure) — không nên so sánh trực tiếp `A(mask_rcnn_*)` với `A(dino_*)` như hai số cùng thang đo,
+chỉ so sánh **độ chênh lệch R50-vs-Swin trong từng họ** với nhau. Decoder checkpoint của DINO cũng
+đã được chính E2 ghi chú là so sánh "mềm" hơn RoI (mỗi query slot có thể attend vùng khác nhau giữa
+clean/adv qua top-k reference points input-dependent) — không phải strict same-region comparison
+như RoI-fix đã làm cho Mask-RCNN.
+
+**Việc cần làm (theo đúng thứ tự, không nhảy cóc)**:
+1. Thêm `mask_rcnn_r50: measure_mask_rcnn`, `dino_r50: measure_dino` vào `MEASURERS` trong
+   `scripts/e2_pipeline_attenuation.py` (không đổi logic đo, chỉ thêm registry entry).
+2. Chạy lại script trên `dev_300` (N=296, noise đã có từ §23 — không craft lại) cho cả 4 model.
+3. Tính `A(model)` cho cả 4, so sánh chênh lệch trong mỗi matched-pair.
+4. Đối chiếu chênh lệch `A` với chênh lệch `C_response` (§23) và chênh lệch ASR thật — xem
+   `Transfer ≈ f(C_response) + g(A)` có giải thích tốt hơn chỉ `C_response` một mình hay không
+   (ít nhất ở mức định tính/bảng số, chưa cần fit mô hình formal).
+5. GO/NO-GO criterion (cần chốt trước khi chạy, theo đúng discipline project): nếu chênh lệch `A`
+   giữa R50/Swin **không nhất quán chiều** giữa 2 matched-pair, hoặc quá nhỏ so với chênh lệch ASR
+   quan sát được, đây là NO-GO cho "downstream amplification" như tầng giải thích thứ hai — quay
+   lại đọc `C_response` một mình là đủ, không thêm tầng mới.
+
+**Kết quả — NO-GO cho `A` như đã định nghĩa.** Chạy N=296 (`results/e7_pipeline_attenuation_matched.csv`),
+`A(model) = mean_rel_l2(final_stage) / mean_rel_l2(backbone_stage)`:
+
+| model | backbone rel_l2 | final-stage rel_l2 | A (rel_l2) | A (cos_dist) | ASR |
+|---|---|---|---|---|---|
+| mask_rcnn_swin_t | 0.475 | 0.403 (RoI head) | 0.848 | 0.683 | 68.1% |
+| mask_rcnn_r50 | 0.987 | 0.996 (RoI head) | **1.010** | 1.318 | 99.1% |
+| dino_swin_l | 0.545 | 0.661 (decoder) | **1.212** | 1.499 | 33.6% |
+| dino_r50 | 1.175 | 0.943 (decoder) | 0.803 | 0.781 | 99.7% |
+
+Δ`A`(R50−Swin) rel_l2: Mask-RCNN **+0.162** (R50 giữ/khuếch đại disturbance qua pipeline nhiều hơn
+Swin-T) nhưng DINO **−0.410** (ngược lại — Swin-L khuếch đại nhiều hơn R50). Cùng chiều đảo ngược
+lặp lại khi dùng `cos_dist` thay `rel_l2` (Mask: R50 1.318 > Swin-T 0.683; DINO: Swin-L 1.499 >
+R50 0.781) — không phải artifact của một cách đo cụ thể. **Đúng tiêu chí đã pre-register: chiều
+không nhất quán giữa 2 matched-pair → NO-GO**, không đổi sang định nghĩa `A` khác để cứu hypothesis.
+
+**Đọc thêm (không đổi verdict, chỉ để hiểu tại sao)**: với Mask-RCNN, *hình dạng* quỹ đạo per-stage
+(neck tăng → RPN giảm mạnh → RoI-pooled tăng → RoI-head giảm) giống nhau về mặt tương đối giữa R50
+và Swin-T — khác biệt chủ yếu nằm ở **biên độ tuyệt đối** tại backbone (Swin-T thấp hơn R50 nhiều,
+0.475 vs 0.987, đúng như E1 đã thấy), không phải ở cách downstream pipeline xử lý nó khác nhau về
+*chất*. Với DINO, backbone rel_l2 của R50 (1.175) cao hơn Swin-L (0.545) — ngược hướng so với cặp
+Mask-RCNN — nên "R50 nào cũng bị phá backbone nhiều hơn Swin" **không phải pattern chung** (đã biết
+từ E1, §8: `mask_rcnn_swin_t` bị phá backbone *ít hơn* `dino_swin_l` dù mAP_drop cao hơn nhiều).
+Kết hợp lại: downstream-amplification-ratio đơn giản không phải mảnh giải thích còn thiếu; puzzle
+"ASR gap giữa 2 head cùng Swin backbone không tỷ lệ với gap C_response" (mở đầu §24) **vẫn để
+ngỏ**, chưa có lời giải từ hướng này.
+
+**Kết luận E7 (đóng, không mở rộng thêm biến thể)**:
+
+> A simple end-to-end amplification ratio (final-stage vs. backbone-stage relative distortion)
+> does not show a consistent R50-vs-Swin direction across the two matched-head pairs (Mask R-CNN:
+> R50 preserves more disturbance than Swin-T; DINO: Swin-L amplifies more than R50) — under both
+> rel_l2 and cos_dist. This specific "downstream amplification" formalization is NOT a viable
+> second decomposition term alongside backbone response coupling (§23); per this project's
+> discipline, no alternative metric was tried to rescue it. The question of why ASR gaps between
+> detector heads on the same Swin backbone don't scale proportionally with their C_response gaps
+> remains open.
+
+Không theo đuổi thêm biến thể của `A` (vd chuẩn hoá theo per-stage baseline khác, hay lấy log-ratio
+thay vì ratio thô) trong phiên này — nếu muốn tiếp tục câu hỏi decomposition, cần một hướng khác
+hẳn cách đo pipeline-attenuation kiểu E2 (vốn đã tự nhận trong docstring gốc là chỉ so sánh nội bộ
+từng họ detector, không cùng thang đo giữa 2 họ) chứ không phải sửa công thức `A`.
+
+## 25. E8: Task-Relevant Response Alignment — NO-GO
+
+**Câu hỏi**: sau E6 (GO) và E7 (NO-GO), ba lời giải thích dạng "kích thước disturbance vô hướng"
+đều đã thất bại — `‖ΔF‖` thô (E1), gradient cosine tức thời surrogate-vs-target (§19), và tỷ lệ
+khuếch đại pipeline vô hướng (§24/E7). Hypothesis mới: không phải **độ lớn** của response mà là
+**hướng** — phần `ΔF` nào align với direction mà chính detector đó thực sự nhạy cảm (task-sensitive
+direction), bất kể magnitude tổng. Formal: `g_t^l = ∂L_det,t/∂F_t^l` (gradient loss detection của
+CHÍNH target, tại backbone feature của chính nó, đo tại ảnh clean), rồi
+`P_t^l = |⟨ΔF_t^l, g_t^l⟩| / (‖ΔF_t^l‖·‖g_t^l‖)`. Prediction đã pre-register: `P(mask_rcnn_swin_t) >
+P(dino_swin_l)` (khớp ASR 68.1%>33.6%), và quan trọng hơn — `P` phải giải thích transfer ordering
+tốt hơn `‖ΔF‖` (E1) và tỷ lệ amplification (E7).
+
+**Engineering — 4 bug thật bắt được qua smoke-test trước khi chạy N=296** (script mới
+`scripts/e8_task_relevant_alignment.py`, tái dùng `transfer_attack/losses.py::detector_task_loss`/
+`build_gt_data_sample`, vốn trước giờ **chỉ từng chạy trên surrogate cho mi_fgsm**, chưa từng chạy
+trên bất kỳ target nào — mọi bug dưới đây là lần đầu code path này chạm 1 target thật):
+
+1. **DINO's `pre_decoder` chỉ tạo `enc_outputs_class`/`enc_outputs_coord`/`dn_meta`** (3 argument
+   bắt buộc của `DINOHead.loss()`) **khi `self.training=True`** (mmdet `dino.py:191-213`, gate hoàn
+   toàn độc lập với BatchNorm) — ở `model.eval()` (trạng thái chuẩn của cả project) các key này bị
+   bỏ hẳn, gây `TypeError`. Sửa bằng `_set_training_keep_norm_frozen()`: bật `model.train()` (để
+   `self.training` đúng cho logic denoising) rồi **ngay lập tức ép mọi `BatchNorm`/`Dropout` submodule
+   về lại `.eval()`** — cần thiết vì `dino_r50`/`mask_rcnn_r50` dùng BatchNorm **không frozen**
+   (`norm_cfg requires_grad=True/False` nhưng vẫn là real BN, không phải GN/LN như 2 biến thể Swin),
+   nên `model.train()` trần sẽ khiến BN dùng batch-statistics của **đúng 1 ảnh** thay vì running-stats
+   đã calibrate — sẽ tính gradient qua một forward pass khác hẳn (và không ổn định) so với forward
+   pass thật đang được dùng để đo ASR/mAP ở mọi nơi khác trong project.
+2. **`gt_boxes` chưa `.to(device)`** trước khi đưa vào `build_gt_data_sample` (khác `attack.py`'s
+   `craft_one_image`, vốn làm việc này ngay đầu hàm) — gây `RuntimeError` device-mismatch sâu bên
+   trong `CdnQueryGenerator` của DINO (denoising query embedding lookup).
+3. **`mask_rcnn_r50`'s `out_indices=(0,1,2,3)` bao gồm stage bị `frozen_stages=1` đóng băng** (layer1,
+   `requires_grad=False` hoàn toàn vì cả path lẫn input đều không cần grad) — `retain_grad()` trên
+   tensor đó crash. Sửa: chỉ `retain_grad()` tensor nào `requires_grad=True`; stage bị freeze coi
+   như đóng góp gradient = 0 vào phép đo alignment (đúng về ngữ nghĩa — không có tín hiệu task-gradient
+   nào từ một nhánh đã đóng băng, không phải giá trị đoán mò).
+4. **Mask R-CNN's `mask_head.loss()` cần `gt_instances.masks`** (segmentation GT) mà
+   `build_gt_data_sample` chưa bao giờ set (project chỉ đánh giá box mAP/ASR, không segmentation) —
+   `AttributeError`. Sửa: tạm gỡ `roi_head.mask_head` (đặt `None`) trước khi gọi `detector_task_loss`,
+   khôi phục lại sau — đúng phạm vi "chỉ tính box-detection task loss", không phải workaround để né
+   thiếu data.
+
+Sau khi sửa cả 4, smoke-test N=3 trên toàn bộ 8 model (bao gồm cả `dino_swin_l`, model rủi ro nhất
+vì backbone có `with_cp=True`) cho giá trị hợp lệ (không NaN, không None) trước khi chạy N=296.
+
+**Kết quả (N=296, `results/e8_task_relevant_alignment.csv`)**:
+
+| target | group | mean_P | ASR |
+|---|---|---|---|
+| fcos_r50 | A | 0.0079 | 97.5 |
+| deformable_detr | A | 0.0062 | 99.1 |
+| yolov3_d53 | B | 0.0100 | 83.3 |
+| yolox_l | B | 0.0084 | 69.3 |
+| mask_rcnn_swin_t | C | 0.0142 | 68.1 |
+| dino_swin_l | C | 0.0067 | 33.6 |
+| dino_r50 | D | 0.0070 | 99.7 |
+| mask_rcnn_r50 | D | 0.0136 | 99.1 |
+
+**Matched-pair**: DINO delta = P(R50)−P(SwinL) = 0.0070−0.0067 = **+0.0003** (CI hai bên chồng lấn
+gần như hoàn toàn: [0.0067,0.0074] vs [0.0064,0.0070]); Mask-RCNN delta = P(R50)−P(SwinT) =
+0.0136−0.0142 = **−0.0005** (CI cũng chồng lấn: [0.0130,0.0143] vs [0.0134,0.0149]). Cả hai delta
+**không tách biệt khỏi 0** trong phạm vi CI, dù ASR giữa 2 vế mỗi pair chênh nhau rất lớn (66 điểm
+cho DINO, 31 điểm cho Mask-RCNN). **Cross-target**: `corr(mean_P, ASR)` trên 8 target = **+0.054** —
+gần như không có quan hệ tuyến tính nào (yếu hơn cả `corr(S_clean,ASR)` NO-GO của E6, §23).
+
+**Chẩn đoán thêm — độ lớn tuyệt đối của P gần sát "sàn nhiễu ngẫu nhiên"**: với dimension đã pool
+(concat mọi backbone stage, pool 7×7) từ ~70,560 (`mask_rcnn_swin_t`) đến ~188,160 (`mask_rcnn_r50`),
+cosine kỳ vọng giữa **2 vector ngẫu nhiên không liên quan** trong không gian chiều `D` là
+`~1/√D ≈ 0.0023–0.0038`. Giá trị `P` quan sát được (0.0062–0.0142) chỉ cao hơn sàn này **2-6 lần** —
+có một tín hiệu khác-0 thật (không phải thuần túy random), nhưng biên độ quá nhỏ so với sàn nhiễu
+để mang đủ thông tin phân biệt matched-pair hay tương quan với ASR. Đây là gợi ý kỹ thuật quan trọng
+cho bất kỳ ai muốn thử lại quantity dạng này: cosine-alignment thô trên vector pool+concat toàn bộ
+backbone (chiều cực cao) có thể bị "curse of dimensionality" che khuất bất kỳ tín hiệu thật nào —
+nếu tồn tại, tín hiệu đó nhiều khả năng nằm trong một **subspace hạng thấp** (như chính hypothesis
+gốc đã gợi ý "hoặc energy projected onto a low-rank task-sensitive subspace"), không phải trải đều
+trên toàn bộ chiều pooled.
+
+**Kết luận E8 (đóng, không đổi metric để cứu hypothesis)**:
+
+> A raw cosine-alignment between the observed backbone response difference and the target's own
+> detection-loss gradient (both pooled+concatenated across all backbone stages) does not
+> distinguish R50 from Swin within either matched-head pair (both deltas statistically
+> indistinguishable from zero despite 31-66 point ASR gaps), and does not correlate with ASR across
+> the 8 targets (r=0.054). The observed magnitudes (0.006-0.014) are only 2-6x the theoretical
+> random-vector cosine floor (~1/sqrt(D) for the ~70k-190k pooled dimensionality used here) --
+> consistent with a real but very weak signal that this specific high-dimensional raw-cosine
+> formalization cannot usefully extract. Per this project's discipline, no alternative metric
+> (e.g. low-rank subspace projection) was tried within E8 itself to rescue it; that would be a
+> separate, newly pre-registered experiment, not a patch to this one.
+
+**Trạng thái sau E6→E7→E8**: `C_response` (§23) vẫn là mechanism candidate duy nhất sống sót qua
+audit. Ba hướng giải thích "phần transfer mà C_response chưa giải thích hết" đều NO-GO: downstream
+amplification vô hướng (E7), task-relevant alignment thô (E8). Câu hỏi mở đầu §24 (tại sao ASR gap
+giữa 2 head cùng Swin backbone không tỷ lệ với C_response gap) **vẫn để ngỏ** sau cả 2 lần thử.
+
+## 26. E9: Response-Coupling Intervention — NO-GO
+
+**Chuyển từ correlation sang intervention**: sau E6 (GO)→E7 (NO-GO)→E8 (NO-GO), thay vì tiếp tục
+tìm thêm biến giải thích tương quan với `C_response`, câu hỏi chuyển thành causal: nếu chủ động
+craft một perturbation làm tăng `C_response`, ASR có tăng theo không — đặc biệt trên target
+cross-backbone khó (Swin)? Ràng buộc nền tảng: `C_response` cần forward qua target thật để tính
+(§23), nên trong vòng lặp crafting black-box thật (chỉ chạm surrogate `faster_rcnn_r50`, đúng
+protocol xuyên suốt project), **không thể tối ưu trực tiếp `C_response`** — chỉ có thể tối ưu một
+**proxy phía surrogate**, rồi ĐO `C_response`/ASR thật trên target sau khi crafting xong (đo, không
+phải objective).
+
+**Proxy đã chọn (xác nhận với user trước khi code)**: spectral/low-frequency bias — hồi sinh hướng
+đã parked ở §11 ("spectral-*constrained* optimization... OPEN, chưa bị falsify") với motivation mới
+từ E6 (cấu trúc tần số thấp có thể là thứ CNN và Transformer backbone cùng dựa vào tương tự nhau
+hơn; E4 cũng đã thấy low band giữ tỷ lệ ASR cao hơn tỷ lệ energy của nó). Không đổi tên/hồi sinh cơ
+chế MVC đã NO-GO (§9) — proxy này khác hẳn về bản chất (spectral projection lên chính `δ`, không
+phải ép đồng thuận đa biến thể model).
+
+**Thiết kế** (script mới `scripts/n9_response_coupling_intervention.py`): 2 trajectory lockstep
+(cùng RNG snapshot mỗi step, cùng quy ước `n6b_path_pilot.py`) trên cùng ảnh — `delta_base` (OSFD
+chuẩn) và `delta_coupling` (OSFD chuẩn, nhưng sau mỗi step, `δ` bị chiếu qua low-pass radial FFT
+mask, chỉ giữ băng tần **low** — đúng ngưỡng `radius_frac ≤ 1/3` mà E4 đã định nghĩa sẵn, không phát
+minh hyperparameter mới). Compute-matched theo construction (cùng số step, cùng gradient computation
+cho cả 2 trajectory; overhead thêm chỉ là 1 FFT+IFFT/step, không đáng kể).
+
+**GO/NO-GO đã pre-register**: GO cần `C_response(coupling) > C_response(base)` trên target chưa
+thấy VÀ ASR/mAP-drop tăng cùng chiều VÀ effect mạnh hơn ở target cross-backbone. NO-GO nếu
+`C_response` tăng mà ASR không tăng, hoặc ngược lại, hoặc chỉ cải thiện ở target cùng họ CNN.
+
+**Kết quả (pilot N=20, 100 step, cả 8 target, `results/n9_response_coupling_pilot_n20.csv`)**:
+
+| target | group | ΔASR | 95% CI | ΔC_response |
+|---|---|---|---|---|
+| fcos_r50 | A | −8.20 | [−12.20,−3.85] | −0.0090 |
+| deformable_detr | A | −4.55 | [−6.78,−1.47] | +0.0032 |
+| yolov3_d53 | B | −35.71 | [−45.31,−25.49] | −0.0074 |
+| yolox_l | B | **−47.52** | [−55.26,−40.35] | −0.0091 |
+| mask_rcnn_swin_t | C | −27.84 | [−34.85,−18.06] | −0.0071 |
+| dino_swin_l | C | −7.00 | [−9.72,−2.63] | +0.0092 |
+| dino_r50 | D | −3.19 | [−4.76,0.00] | +0.0033 |
+| mask_rcnn_r50 | D | −4.44 | [−6.56,−2.60] | +0.0001 |
+
+**Đọc kết quả — NO-GO rõ ràng, cả 2 vế đều fail, không cần scale N**: `ΔASR` **âm ở cả 8/8 target**
+(CI hầu hết không cắt 0), lớn nhất đúng ở nhóm CNN dễ transfer (`yolox_l` −47.5, `yolov3_d53`
+−35.7) — ngược hẳn hypothesis (kỳ vọng cross-backbone Swin mới là nơi cải thiện). `ΔC_response`
+dao động rất nhỏ quanh 0 (−0.009 đến +0.009), không có xu hướng tăng nhất quán — proxy spectral
+low-pass **không hề làm tăng response coupling một cách đáng tin cậy**, và ngay cả ở 3 target có
+`ΔC_response` dương nhẹ (`deformable_detr`, `dino_swin_l`, `dino_r50`), `ΔASR` vẫn âm — hai đại
+lượng không đi cùng chiều ở bất kỳ target nào theo hướng GO cần. Pattern đồng nhất chiều trên toàn
+bộ 8 target (không phải noise ngẫu nhiên) — không cần chạy N=296 để biết thêm.
+
+**Diễn giải cơ chế thất bại (không phải để cứu hypothesis, chỉ để hiểu)**: chiếu `δ` về đúng 1 băng
+tần thấp **ở MỌI step trong suốt 100 step** rất có thể giới hạn nghiêm trọng không gian tìm kiếm của
+chính optimization — khớp với phát hiện E4b (sau L∞-renormalize, ngay cả band low cũng mất phần lớn
+hiệu quả tấn công, "not sufficient evidence of an intrinsic shared vulnerable subspace"). Việc ép
+cứng suốt cả trajectory khác hẳn E4's post-hoc decompose-rồi-inject (chỉ áp dụng 1 lần lên noise đã
+crafted xong) — ở đây constraint tác động vào chính quá trình ascent, nhiều khả năng làm giảm hiệu
+quả ascent nói chung (giải thích ASR giảm đều ở MỌI target, kể cả surrogate-gần-họ) chứ không phải
+chọn lọc "chỉ mất phần disruption CNN-specific".
+
+**Kết luận E9 (đóng, không đổi proxy để cứu hypothesis)**:
+
+> A hard spectral low-pass projection applied to the perturbation at every optimization step
+> (reviving S11's parked spectral-constrained-optimization direction) decreases ASR on all 8
+> targets (largest drops on same-family CNN targets, not the hard cross-backbone ones the
+> hypothesis targeted) while leaving C_response essentially unchanged (|delta| < 0.01, no
+> consistent sign). Neither half of the causal hypothesis holds: the surrogate-only proxy neither
+> reliably increases C_response nor, where it marginally does, does ASR follow. Per this project's
+> discipline, this closes the "explanation-by-correlation to intervention" line for THIS specific
+> proxy without trying alternative formulations (e.g. a soft frequency-domain regularizer instead
+> of a hard per-step projection, or a different radius) within the same experiment — any such
+> variant would need to be a separately pre-registered follow-up.
+
+**Trạng thái sau E6→E7→E8→E9**: `C_response` vẫn là mechanism candidate duy nhất đứng vững của
+project (§23). Ba hướng mở rộng nó — giải thích residual gap (E7, E8) và can thiệp trực tiếp lên nó
+(E9) — đều NO-GO. Không có proxy phía surrogate nào đã thử làm tăng được `C_response` một cách đáng
+tin cậy; đây là rào cản cụ thể (không phải giả thuyết) cho bất kỳ ai muốn biến `C_response` thành
+một method tấn công thật, không chỉ một diagnostic.

@@ -1,0 +1,231 @@
+{
+  "timestamp": "20260905T095420Z",
+  "attack": "osfd",
+  "manifest": "data/manifests/dev_300.json",
+  "seed": 42,
+  "limit": 120,
+  "score_thr": 0.3,
+  "iou_thr": 0.5,
+  "config": {
+    "attack_type": "osfd",
+    "epsilon": 5.0,
+    "alpha": 1.0,
+    "steps": 100,
+    "mu": 1.0,
+    "k": 3.0,
+    "use_rrb": true,
+    "theta": 7.0,
+    "l_s": 10,
+    "rho": 0.8,
+    "s_max": 1.1,
+    "sigma": 6.0,
+    "canvas": 800
+  },
+  "results": {
+    "n_images_in_manifest": 120,
+    "n_crafted": 117,
+    "n_skipped": 3,
+    "craft_elapsed_sec": 998.9,
+    "eval_elapsed_sec": 264.1,
+    "rows": [
+      {
+        "attack": "clean",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": null,
+        "mAP_adv": 0.4912825935030304,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6970098488611357,
+        "ASR": ""
+      },
+      {
+        "attack": "osfd",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": 0.4916168781792229,
+        "mAP_adv": 0.0023099999475349894,
+        "mAP_drop_pct": 99.53012192012397,
+        "AP50_clean": 0.6977983660461146,
+        "AP50_adv": 0.0025760550958986747,
+        "ASR": 99.46524064171123
+      },
+      {
+        "attack": "clean",
+        "model_name": "fcos_r50",
+        "group": "A",
+        "mAP_clean": null,
+        "mAP_adv": 0.4713860387434082,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6282393616142924,
+        "ASR": ""
+      },
+      {
+        "attack": "osfd",
+        "model_name": "fcos_r50",
+        "group": "A",
+        "mAP_clean": 0.4715893699102949,
+        "mAP_adv": 0.011071224216791449,
+        "mAP_drop_pct": 97.65235925082506,
+        "AP50_clean": 0.6285217207941378,
+        "AP50_adv": 0.01691635846173182,
+        "ASR": 98.16272965879266
+      },
+      {
+        "attack": "clean",
+        "model_name": "deformable_detr",
+        "group": "A",
+        "mAP_clean": null,
+        "mAP_adv": 0.5320081492511843,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.692214651764686,
+        "ASR": ""
+      },
+      {
+        "attack": "osfd",
+        "model_name": "deformable_detr",
+        "group": "A",
+        "mAP_clean": 0.5382183337728514,
+        "mAP_adv": 0.0024365899024240156,
+        "mAP_drop_pct": 99.54728597122588,
+        "AP50_clean": 0.6993805489393746,
+        "AP50_adv": 0.0031993714934479686,
+        "ASR": 98.7410071942446
+      },
+      {
+        "attack": "clean",
+        "model_name": "yolov3_d53",
+        "group": "B",
+        "mAP_clean": null,
+        "mAP_adv": 0.4346378557260363,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6808783531602988,
+        "ASR": ""
+      },
+      {
+        "attack": "osfd",
+        "model_name": "yolov3_d53",
+        "group": "B",
+        "mAP_clean": 0.43471154077768864,
+        "mAP_adv": 0.04580522436788089,
+        "mAP_drop_pct": 89.46307606972283,
+        "AP50_clean": 0.681060939257183,
+        "AP50_adv": 0.08216123313394524,
+        "ASR": 82.73809523809524
+      },
+      {
+        "attack": "clean",
+        "model_name": "yolox_l",
+        "group": "B",
+        "mAP_clean": null,
+        "mAP_adv": 0.6283316305486278,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.78035322163075,
+        "ASR": ""
+      },
+      {
+        "attack": "osfd",
+        "model_name": "yolox_l",
+        "group": "B",
+        "mAP_clean": 0.6284259844744332,
+        "mAP_adv": 0.13934892307151503,
+        "mAP_drop_pct": 77.82572227848667,
+        "AP50_clean": 0.7804087626563451,
+        "AP50_adv": 0.20977151109919145,
+        "ASR": 67.42301458670988
+      },
+      {
+        "attack": "clean",
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "mAP_clean": null,
+        "mAP_adv": 0.5172126524701681,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.7238448990097754,
+        "ASR": ""
+      },
+      {
+        "attack": "osfd",
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "mAP_clean": 0.5173008357929623,
+        "mAP_adv": 0.12867501267721856,
+        "mAP_drop_pct": 75.12569016441377,
+        "AP50_clean": 0.7240299457428647,
+        "AP50_adv": 0.20383623521841085,
+        "ASR": 67.16417910447761
+      },
+      {
+        "attack": "clean",
+        "model_name": "dino_swin_l",
+        "group": "C",
+        "mAP_clean": null,
+        "mAP_adv": 0.6510812254373252,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.8188853183950633,
+        "ASR": ""
+      },
+      {
+        "attack": "osfd",
+        "model_name": "dino_swin_l",
+        "group": "C",
+        "mAP_clean": 0.6511584646588151,
+        "mAP_adv": 0.47657361265613013,
+        "mAP_drop_pct": 26.81142325227416,
+        "AP50_clean": 0.8189731741778746,
+        "AP50_adv": 0.610446734103922,
+        "ASR": 32.89473684210526
+      },
+      {
+        "attack": "clean",
+        "model_name": "dino_r50",
+        "group": "D",
+        "mAP_clean": null,
+        "mAP_adv": 0.6013471515037299,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.7562804052614203,
+        "ASR": ""
+      },
+      {
+        "attack": "osfd",
+        "model_name": "dino_r50",
+        "group": "D",
+        "mAP_clean": 0.6023141888049761,
+        "mAP_adv": 0.002570837362611566,
+        "mAP_drop_pct": 99.57317336858489,
+        "AP50_clean": 0.7578762497503502,
+        "AP50_adv": 0.003291074382482839,
+        "ASR": 99.28952042628775
+      },
+      {
+        "attack": "clean",
+        "model_name": "mask_rcnn_r50",
+        "group": "D",
+        "mAP_clean": null,
+        "mAP_adv": 0.4908443017106434,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6994981123064731,
+        "ASR": ""
+      },
+      {
+        "attack": "osfd",
+        "model_name": "mask_rcnn_r50",
+        "group": "D",
+        "mAP_clean": 0.49115032465520536,
+        "mAP_adv": 0.0020337232471352726,
+        "mAP_drop_pct": 99.58592651881825,
+        "AP50_clean": 0.700449369476924,
+        "AP50_adv": 0.0022688903764936904,
+        "ASR": 99.28698752228163
+      }
+    ]
+  }
+}

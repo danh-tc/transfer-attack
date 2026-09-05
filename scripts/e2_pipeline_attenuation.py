@@ -167,6 +167,14 @@ def measure_dino(model, handle, x_clean, x_adv, ds, device: str) -> dict:
 MEASURERS = {
     "mask_rcnn_swin_t": measure_mask_rcnn,
     "dino_swin_l": measure_dino,
+    # Matched-pair R50 controls (added for E7, RESEARCH.md §24) -- same head/
+    # decoder as the corresponding Swin model above, ResNet-50 backbone
+    # instead of Swin. measure_mask_rcnn/measure_dino are architecture-generic
+    # (call model.neck/model.rpn_head/model.roi_head or
+    # model.pre_transformer/forward_encoder/pre_decoder/forward_decoder, none
+    # of which are Swin-specific), so no new code needed for these two.
+    "mask_rcnn_r50": measure_mask_rcnn,
+    "dino_r50": measure_dino,
 }
 
 
