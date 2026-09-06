@@ -1979,3 +1979,142 @@ project (§23). Ba hướng mở rộng nó — giải thích residual gap (E7, 
 (E9) — đều NO-GO. Không có proxy phía surrogate nào đã thử làm tăng được `C_response` một cách đáng
 tin cậy; đây là rào cản cụ thể (không phải giả thuyết) cho bất kỳ ai muốn biến `C_response` thành
 một method tấn công thật, không chỉ một diagnostic.
+
+## 27. E10: Cross-Architecture Semantic-Region Relational Geometry — STRONG GO (pilot, N=49)
+
+Sau chuỗi E6→E9 (candidate mechanism `C_response` đứng vững nhưng không tìm được cách biến thành
+objective tấn công), E10 đổi hẳn trục đo lường thay vì tiếp tục mở rộng `C_response`: mọi diagnostic
+từ E1 đến E9 đều so sánh **raw feature similarity** (cosine/L2 giữa toàn bộ feature map hoặc giữa
+Gram matrix của nó) — E10 giả thuyết rằng cái thật sự sống sót qua đổi kiến trúc backbone không phải
+độ lớn/hướng của feature tại một điểm, mà **quan hệ tương đối giữa các vùng ngữ nghĩa của cùng một
+object** (interior/boundary/near-background/far-background) — một đại lượng không so sánh vector
+feature trực tiếp giữa các model (vốn sống ở không gian khác nhau), nên "architecture-agnostic by
+construction" thay vì phải suy luận gián tiếp qua Gram/CKA như E6.
+
+**Thiết kế** (script mới `scripts/e10_relational_geometry.py`, theo đúng đặc tả người dùng đưa ra
+trước khi chạy — không đổi sau khi thấy kết quả): với mỗi GT box, định nghĩa 4 vùng bằng
+shrink/expand hình chữ nhật của chính box đó — **O** (interior, shrink 12.5%/cạnh), **E** (boundary,
+`box - O`), **B_n** (near-background, `expand(box, 25%) - box`), **B_f** (far-background, phần ảnh
+còn lại) — **B_n/B_f loại trừ tường minh vùng chồng lấn với MỌI GT box khác trong ảnh** (đúng yêu
+cầu tránh "background" lẫn object khác). Pool feature mỗi vùng bằng weighted-mean qua
+`F.interpolate(mode="area")` resize mask xuống đúng kích thước từng backbone stage (không threshold
+cứng — giữ nguyên tỷ lệ phủ phân số), bỏ qua (object, stage) nếu vùng nào phủ dưới 1 stage-cell.
+Relational signature `r = [d(O,E), d(O,Bn), d(O,Bf), d(E,Bn), d(E,Bf), d(Bn,Bf)]`, `d = 1 - cosine`.
+Toàn bộ phân tích dùng **stage cuối cùng** của mỗi backbone (tương đối theo số stage riêng của từng
+model, không phải index tuyệt đối — mọi model trong registry đều có 4 stage nên không có vấn đề so
+sánh lệch độ sâu).
+
+6 model: `faster_rcnn_r50`, `dino_r50`, `mask_rcnn_r50` (family "R50"), `yolox_l` (family "CSP", chỉ
+1 model nên không tính được within-family consistency — cột `CSP_consistency` = NaN có chủ đích),
+`mask_rcnn_swin_t`, `dino_swin_l` (family "Swin"). Dataset `dev_50` (N=49 sau khi 1 ảnh bị skip do
+0 GT box hợp lệ, giống mọi run khác trên manifest này). Noise: `osfd` mặc định (k=3, RRB on, recraft
+mới trên checkout này — xem HANDOFF.md) cho Q1/Q2, cộng 2 arm factorial của E3 tái tạo đúng
+hyperparameter cũ (`e3_k1_norrb`: k=1 RRB off, `e3_k1_rrb`: k=1 RRB on) cho Q3 — cả 3 bộ đều craft
+mới trên `dev_50` vì `results/` gitignored trống hoàn toàn trên checkout này (đã verify ASR khớp
+biên ~1-2 điểm so với log lịch sử tương ứng, xem bảng Q2/Q3 dưới). Ngưỡng pre-register (chốt trước
+khi chạy, không đổi sau khi thấy số): GO-A cần ≥2/6 relation có cả `global` VÀ `cross_family`
+Spearman rho > 0.30; GO-B/GO-C đọc dấu + độ khớp hướng giữa disruption và ASR, không có ngưỡng số
+cứng (theo đúng đặc tả gốc — "discovery", không phải confirmatory test).
+
+**Table A — clean relational invariance** (`results/e10_table_A_clean_invariance.csv`; Spearman rho
+của từng relation qua các cặp model, N=194 object có dữ liệu hợp lệ ở cả 6 model / 337 object khả
+dụng tổng cộng):
+
+| relation | R50 (3 cặp) | CSP | Swin (1 cặp) | cross-family | global |
+|---|---:|---:|---:|---:|---:|
+| O↔E | 0.893 | NaN | 0.556 | 0.768 | 0.779 |
+| O↔nearBG | 0.832 | NaN | 0.525 | 0.641 | 0.672 |
+| O↔farBG | 0.541 | NaN | 0.088 | 0.304 | 0.337 |
+| E↔nearBG | 0.886 | NaN | 0.681 | 0.734 | 0.761 |
+| E↔farBG | 0.594 | NaN | 0.323 | 0.466 | 0.482 |
+| nearBG↔farBG | 0.755 | NaN | 0.645 | 0.687 | 0.698 |
+
+**GO-A: PASS rõ ràng, 6/6 relation đạt ngưỡng** (cần ≥2/6) — kể cả `O↔farBG`, relation yếu nhất,
+vẫn qua ngưỡng (`cross_family=0.304`). Đáng chú ý: cross-family consistency (R50 so với Swin/CSP,
+đúng phép so sánh mà GO-1 criterion yêu cầu — "không chỉ R50↔R50") **cao gần bằng within-R50-family**
+ở phần lớn relation (`O↔E`: 0.768 vs 0.893; `E↔nearBG`: 0.734 vs 0.886) — quan hệ tương đối giữa các
+vùng ngữ nghĩa thực sự là một tín hiệu per-object tái lập được across ResNet/CSPDarknet/Swin, không
+chỉ trùng hợp trong 1 họ backbone. `Swin_consistency` (chỉ 1 cặp `mask_rcnn_swin_t` vs `dino_swin_l`)
+nhìn chung thấp hơn R50 (kỳ vọng — ít cặp hơn, ước lượng nhiễu hơn; `O↔farBG` Swin=0.088 gần 0 là
+điểm yếu nhất của bảng, cần đọc thận trọng ở N nhỏ này).
+
+**Table B — OSFD attack disruption, giới hạn vào 6 relation shared** (Q1 xác nhận cả 6 đều shared
+nên `disrupt_shared == disrupt_all6` ở pilot này; `results/e10_table_B_attack_disruption.csv`):
+
+| model | family | ASR | disrupt_shared |
+|---|---|---:|---:|
+| faster_rcnn_r50 | R50 (surrogate) | 99.1 | 0.4040 |
+| dino_r50 | R50 | 98.3 | 0.3459 |
+| mask_rcnn_r50 | R50 | 99.1 | 0.3862 |
+| yolox_l | CSP | 70.9 | 0.3369 |
+| mask_rcnn_swin_t | Swin | 69.4 | 0.0388 |
+| dino_swin_l | Swin | 28.3 | 0.1918 |
+
+`corr(ASR, disrupt_shared)` qua 6 target = **+0.621**. Matched-pair (cùng head/decoder, chỉ đổi
+backbone — cặp evidence chính xuyên suốt project từ §21):
+
+- **DINO**: `disrupt_shared(dino_r50)=0.346 > disrupt_shared(dino_swin_l)=0.192`, cùng chiều với
+  `ASR(dino_r50)=98.3 > ASR(dino_swin_l)=28.3` → **khớp hướng**.
+- **Mask R-CNN**: `disrupt_shared(mask_rcnn_r50)=0.386 > disrupt_shared(mask_rcnn_swin_t)=0.039`
+  (gấp ~10 lần, chênh lệch lớn nhất trong toàn bảng), cùng chiều với
+  `ASR(mask_rcnn_r50)=99.1 > ASR(mask_rcnn_swin_t)=69.4` → **khớp hướng**.
+
+**GO-B: PASS** — cả correlation tổng lẫn cả 2 matched-pair đều đúng hướng, không có trường hợp
+ngược. `mask_rcnn_swin_t` có `disrupt_shared` thấp bất thường (0.039, thấp hơn cả `dino_swin_l`) dù
+ASR của nó cao hơn `dino_swin_l` (69.4 > 28.3) — ngoại lệ duy nhất trong bảng, đáng ghi nhận nhưng
+không đủ để đảo verdict (matched-pair so sánh cùng-head là bằng chứng chính, không phải so sánh
+chéo-head).
+
+**Table C — RRB mechanism, disruption giới hạn vào 6 relation shared**
+(`results/e10_table_C_rrb_mechanism.csv`; ASR fetch mới trên noise recraft, không lấy từ log E3 cũ
+vì E3 cũ chưa có `dino_r50`/`mask_rcnn_r50` trong registry — số ASR ở đây cho `mask_rcnn_swin_t`
+(noRRB=19.0, RRB=46.7) khớp biên ~vài điểm với con số lịch sử §8's E3 factorial, xác nhận recraft
+đúng config):
+
+| model | family | Δ disruption (RRB−noRRB) | Δ ASR (RRB−noRRB) | khớp dấu? |
+|---|---|---:|---:|---|
+| faster_rcnn_r50 | R50 | −0.176 | −9.9 | ✅ |
+| dino_r50 | R50 | −0.020 | −8.4 | ✅ |
+| mask_rcnn_r50 | R50 | −0.155 | −11.7 | ✅ |
+| yolox_l | CSP | +0.043 | +28.7 | ✅ |
+| mask_rcnn_swin_t | Swin | +0.017 | +27.7 | ✅ |
+| dino_swin_l | Swin | +0.066 | +14.3 | ✅ |
+
+**GO-C: PASS, 6/6 model khớp dấu** — và đáng chú ý hơn cả tỷ lệ 6/6: đây là khớp dấu **theo cả 2
+hướng**, không phải cùng một chiều dương giả tạo. Trên 3 target họ R50 (đã gần ceiling ASR ~99% dù
+không có RRB, k=1), thêm RRB làm **giảm cả disruption lẫn ASR** — RRB "tốn" một phần hiệu quả vào
+việc tạo augmented view thay vì tối đa hoá tấn công lên 1 view duy nhất khi target đã gần bão hoà.
+Trên 3 target khó (CSP/Swin, ASR còn nhiều dư địa), thêm RRB làm **tăng cả hai** — đúng như E3 (§8)
+đã quan sát ở mức ASR thô. Cùng MỘT đại lượng vô hướng (disruption của đúng 6 relation đã xác định
+là shared ở Q1) giải thích được ASR di chuyển **cả lên lẫn xuống** tuỳ target — đây là bằng chứng
+mạnh hơn nhiều so với việc chỉ khớp dấu một chiều, vì loại trừ khả năng "khớp dấu" chỉ là trùng hợp
+do hầu hết delta cùng dấu ngẫu nhiên.
+
+**Kết luận E10 (cả 3 tầng pass, mạnh và sạch — không cần rescue/metric-shop)**:
+
+> A 6-dimensional relational signature between an object's interior, boundary, near-background and
+> far-background — built purely from within-image region comparisons, never comparing raw feature
+> vectors across architectures — is a reproducible per-object signal across ResNet, CSPDarknet and
+> Swin backbones (GO-A, 6/6 relations, cross-family rho up to 0.77). OSFD's clean→adversarial
+> disruption of exactly this shared signature tracks ASR both in aggregate (r=0.62 across 6 targets)
+> and in both same-head/different-backbone matched pairs (GO-B). RRB's effect on this same shared-
+> relation disruption metric moves in the same direction as its effect on ASR for all 6 models,
+> including the sign flip between near-ceiling R50 targets (RRB slightly hurts both) and harder
+> CSP/Swin targets (RRB helps both) (GO-C). This is the first mechanism in the project's diagnostic
+> history (E1 through E9) where a single scalar explains attack success moving in BOTH directions
+> across a manipulation (RRB on/off), not just a one-directional correlation.
+
+**Giới hạn cần đọc kèm trước khi scale**: (1) N=49 (`dev_50`) là pilot đúng như kế hoạch, chưa phải
+confirm — Swin-family trong Table A chỉ có 1 cặp model nên ước lượng nhiễu hơn hẳn R50 (3 cặp); (2)
+`O↔farBG` là relation yếu nhất (cross_family=0.304, sát ngưỡng) — nếu scale N=300 cho kết quả tụt
+dưới 0.30 thì shared-set sẽ còn 5/6 thay vì 6/6, cần re-tính Table B/C với shared-set mới chứ không
+giữ nguyên kết luận cũ; (3) `mask_rcnn_swin_t` có `disrupt_shared` thấp bất thường relative đến ASR
+của nó trong Table B — chưa có lời giải, không ảnh hưởng verdict nhưng đáng theo dõi ở N lớn hơn;
+(4) toàn bộ 3 GO đều dựa trên **stage cuối** duy nhất — chưa kiểm tra các stage nông hơn có cho
+pattern khác không (dữ liệu đã có sẵn trong `results/e10_relational_clean.csv`/`_delta.csv`, chỉ
+chưa phân tích).
+
+**Bước tiếp theo (chưa làm, cần xác nhận với user trước khi chạy — compute cost đáng kể, ~6x pilot
+này tức nhiều giờ)**: đúng kế hoạch pre-registered ban đầu, GO ở pilot N=49 nghĩa là scale lên
+`dev_300` để confirm trước khi bắt đầu thiết kế attack objective mới dựa trên relational signature
+này.

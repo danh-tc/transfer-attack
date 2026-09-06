@@ -5,24 +5,45 @@ không cần đọc lại toàn bộ `RESEARCH.md` từ đầu. `RESEARCH.md` v�
 mọi kết quả nghiên cứu (đặc biệt §21-§26 cho phiên này) — file này chỉ tóm tắt điều hướng +
 engineering context không nằm trong journal.
 
-**Cập nhật lần cuối**: 2026-09-05. Môi trường chạy là **checkout mới, không kế thừa state cũ**:
-`results/` (gitignored) hoàn toàn trống — không noise, không prediction cache, không CSV nào từ
-các phiên trước còn sống, chỉ `runs/*.json` (metrics tổng hợp) và các file `.md` là còn nguyên vì
-có commit. Cũng thiếu 2 checkpoint (`dino_r50`, `mask_rcnn_r50`) — đã tải lại qua `mim download`
-(xem "Engineering notes"). Phiên này **mở lại compute** (khác định hướng "paper closure" cuối phiên
-trước) theo yêu cầu user, chạy 4 thực nghiệm liên tiếp: **E6 — Backbone Adversarial Response
+**Cập nhật lần cuối**: 2026-09-06. Checkout vẫn không kế thừa state cũ: `results/` (gitignored) trống
+hoàn toàn khi phiên bắt đầu, thiếu cả 2 checkpoint `dino_r50`/`mask_rcnn_r50` (đã tải lại qua
+`mim download`, xem "Engineering notes"). Phiên 2026-09-06 chạy **E10 — Cross-Architecture
+Semantic-Region Relational Geometry** (`RESEARCH.md` §27, script mới `scripts/e10_relational_geometry.py`)
+— pilot N=49 trên `dev_50`, **STRONG GO cả 3 tầng** (existence, attack-relevance, RRB-mechanism), đọc
+kỹ §27 trước khi quyết định bước tiếp theo (đề xuất kế tiếp: scale `dev_300` để confirm, CHƯA làm,
+cần hỏi user trước vì compute cost đáng kể). Đây là kết quả dương mạnh nhất kể từ E6 — khác E6 (chỉ
+diagnostic, không tìm được cách biến thành objective tấn công qua E7-E9), E10 sinh ra một đại lượng
+đo được **từ chính surrogate** (không cần forward qua target), nên có đường đi rõ ràng để trở thành
+attack objective mới (`L_rel`, xem cuối §27's tinh thần gốc — chưa code). `scripts/craft.py` được
+thêm cờ `--no-rrb` (nhỏ, không phá gì cũ) để craft noise cho arm RRB-off mà không cần viết script
+riêng như E3 đã làm.
+
+Phiên trước (2026-09-05) chạy 4 thực nghiệm: **E6 — Backbone Adversarial Response
 Coupling** (`RESEARCH.md` §23, GO sau audit jackknife), **E7 — Downstream Amplification**
 (`RESEARCH.md` §24, NO-GO), **E8 — Task-Relevant Response Alignment** (`RESEARCH.md` §25, NO-GO),
 **E9 — Response-Coupling Intervention** (`RESEARCH.md` §26, NO-GO). E6 là mechanism candidate đầu
 tiên sống sót qua cả replication ladder (N=49→120→296, 2 pool mode, 3 bootstrap_frac, delete-1
-jackknife) mà không yếu đi — đây là finding quan trọng nhất phiên này. E7/E8 test 2 hướng giải
-thích phần transfer mà `C_response` chưa giải thích hết (đều NO-GO); E9 thử chuyển sang can thiệp
-trực tiếp (craft attack mới tăng `C_response`) — cũng NO-GO, cả ASR lẫn C_response đều không tăng
-theo hướng cần. Đọc kỹ §23-§26 trước khi quyết định bước tiếp theo.
+jackknife) mà không yếu đi. E7/E8 test 2 hướng giải thích phần transfer mà `C_response` chưa giải
+thích hết (đều NO-GO); E9 thử chuyển sang can thiệp trực tiếp (craft attack mới tăng `C_response`)
+— cũng NO-GO, cả ASR lẫn C_response đều không tăng theo hướng cần.
 
 ## Trạng thái hiện tại (quan trọng nhất, đọc trước)
 
-**MỚI NHẤT (2026-09-05) — E6 Backbone Adversarial Response Coupling: ĐÃ ĐÓNG (GO, đọc thận trọng
+**MỚI NHẤT (2026-09-06) — E10 Cross-Architecture Semantic-Region Relational Geometry: STRONG GO,
+pilot N=49, chưa scale.** Xem `RESEARCH.md` §27 để có đầy đủ số liệu/bảng. Tóm tắt cực ngắn: định
+nghĩa 4 vùng ngữ nghĩa quanh mỗi GT box (interior O / boundary E / near-bg Bn / far-bg Bf), đo quan
+hệ TƯƠNG ĐỐI giữa 4 vùng (6 cosine-distance) thay vì so raw feature — (1) quan hệ này ổn định cross-
+architecture (R50/CSP/Swin, 6/6 relation qua ngưỡng); (2) OSFD phá đúng quan hệ này theo hướng khớp
+ASR (corr=0.62, cả 2 matched-pair R50-vs-Swin đều khớp hướng); (3) RRB tăng/giảm mức phá này CÙNG
+CHIỀU với tăng/giảm ASR trên cả 6 model, kể cả đảo chiều dấu giữa target dễ (R50, RRB làm giảm cả
+hai) và khó (CSP/Swin, RRB làm tăng cả hai) — bằng chứng mạnh hơn khớp dấu một chiều đơn thuần. Output:
+`results/e10_relational_{clean,delta}.csv` (chi tiết per-object/per-stage) +
+`results/e10_table_{A,B,C}_*.csv`. Noise dùng: recraft mới trên `dev_50` — `results/noise/dev_50/
+{osfd,e3_k1_norrb,e3_k1_rrb}/` (osfd = k=3 RRB on chuẩn; 2 arm còn lại tái tạo đúng hyperparameter
+E3 cũ để đo Q3). **Chưa quyết định/chạy scale `dev_300`** — cần hỏi user trước (ước tính nhiều giờ
+compute nếu giữ nguyên script hiện tại; xem "Engineering notes" về tối ưu có thể làm trước khi scale).
+
+**MỚI NHẤT TRƯỚC ĐÓ (2026-09-05) — E6 Backbone Adversarial Response Coupling: ĐÃ ĐÓNG (GO, đọc thận trọng
 sau audit)**, mechanism candidate cho H1 (`RESEARCH.md` §23, script `scripts/e6_response_coupling.py`).
 Trả lời câu hỏi H1 để ngỏ ("tại sao backbone family là nguồn gốc gap, không chỉ rằng nó là") sau khi
 `‖ΔF‖` (E1) và gradient cosine (§19) đều thất bại. Đo `C_response = CKA(Gram(ΔF_hat_surrogate),
@@ -164,6 +185,21 @@ ngỏ ("tại sao backbone family là nguồn gốc gap") bằng E6 (xem "Trạn
 
 ## Engineering notes quan trọng (không nằm trong RESEARCH.md, dễ quên/redo nhầm)
 
+- **`scripts/e10_relational_geometry.py` chậm hơn dự kiến (~8 phút/model cho N=49, tức ~48 phút cho
+  6 model) — bottleneck là CPU, không phải GPU** (`nvidia-smi` cho thấy 0% GPU util suốt lúc chạy,
+  process Python dùng ~400% CPU). Đã xác định 2 nguồn lãng phí nhưng CHƯA sửa (vì sửa giữa chừng lúc
+  job đang chạy sẽ mất tiến độ, và pilot N=49 chấp nhận được ở tốc độ hiện tại) — **sửa trước khi
+  scale `dev_300`** (~6x ảnh, sẽ mất nhiều giờ nếu giữ nguyên):
+  1. `build_region_masks(...)` bị gọi lại **6 lần thừa** (1 lần/model) cho cùng 1 ảnh dù mask chỉ phụ
+     thuộc GT box, không phụ thuộc model — nên đảo vòng lặp thành ảnh-ngoài/model-trong (build tất cả
+     model handle 1 lần, giữ trong bộ nhớ GPU luôn — 6 detector cỡ vừa, VRAM 20GB dư sức chứa), build
+     mask 1 lần/ảnh rồi tái dùng cho cả 6 model.
+  2. `pool_regions_one_stage` gọi `F.interpolate` riêng lẻ cho từng vùng (4 lần/stage/pass) — nên
+     gộp (O,E,Bn,Bf) thành 1 tensor batch `(4,1,canvas,canvas)` rồi 1 lệnh `interpolate` duy nhất, và
+     cân nhắc gộp luôn qua các stage nếu `mode="area"` cho phép batch nhiều size khác nhau (không thì
+     ít nhất gộp theo vùng).
+  Không đổi kết quả số học nếu sửa đúng (mask không đổi theo model, chỉ đổi hiệu năng) — verify lại
+  bằng cách so Table A/B/C trước/sau optimize trên cùng `dev_50` trước khi tin dùng cho `dev_300`.
 - **Checkpoint `dino_r50`/`mask_rcnn_r50` không tự động có sẵn trên checkout mới** — dù đã có trong
   `MODEL_REGISTRY` từ phiên trước, file `.pth` không commit (gitignored). Tải lại bằng:
   `mim download mmdet --config dino-4scale_r50_8xb2-12e_coco --dest checkpoints/` và

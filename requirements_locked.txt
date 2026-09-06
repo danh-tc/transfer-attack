@@ -1,7 +1,7 @@
 addict==2.4.0
 aliyun-python-sdk-core==2.16.1
 aliyun-python-sdk-kms==2.16.5
-anyio==4.15.0
+anyio==4.15.1
 argon2-cffi==25.1.0
 argon2-cffi-bindings==26.1.0
 arrow==1.4.0
@@ -136,7 +136,7 @@ torchvision==0.16.2+cu121
 tornado==6.5.8
 tqdm==4.70.0
 traitlets==5.16.1
--e git+https://github.com/danh-tc/transfer-attack.git@c0ecf3d95dd07212d64a7800799bf0e1e50d84ff#egg=transfer_attack
+-e git+https://github.com/danh-tc/transfer-attack.git@6e1e2106eb4ac8a36e576d3e9f6930086fb39515#egg=transfer_attack
 triton==2.1.0
 typing_extensions==4.16.0
 tzdata==2026.3

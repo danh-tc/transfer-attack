@@ -37,6 +37,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--s-max", type=float, default=None)
     p.add_argument("--sigma", type=float, default=None)
     p.add_argument("--canvas", type=int, default=None)
+    p.add_argument("--no-rrb", action="store_true", help="OSFD only -- disable RRB augmentation (single un-augmented view, E3 factorial's 'norrb' arm)")
     p.add_argument("--device", type=str, default="cuda:0")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--limit", type=int, default=None, help="only process the first N images (smoke tests)")
@@ -79,6 +80,8 @@ def main() -> None:
         val = getattr(args, field)
         if val is not None:
             cfg_kwargs[field] = val
+    if args.no_rrb:
+        cfg_kwargs["use_rrb"] = False
     cfg = AttackConfig(attack_type=args.attack, **cfg_kwargs)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
