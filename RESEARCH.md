@@ -2118,3 +2118,131 @@ chưa phân tích).
 này tức nhiều giờ)**: đúng kế hoạch pre-registered ban đầu, GO ở pilot N=49 nghĩa là scale lên
 `dev_300` để confirm trước khi bắt đầu thiết kế attack objective mới dựa trên relational signature
 này.
+
+## 28. E10 dev_300 confirmation — STRONG GO giữ vững (N=296), 1 relation rớt khỏi shared-set đúng như dự đoán
+
+Theo đúng điều kiện user đặt ra trước khi scale: **không đổi bất kỳ định nghĩa/metric/hypothesis
+nào của E10** (FROZEN SPEC ở đầu `scripts/e10_relational_geometry.py` giữ nguyên nguyên văn), chỉ
+được tối ưu engineering và phải chứng minh tương đương số học trước khi chạy `dev_300`.
+
+**Bước 0 — Equivalence check.** Script hiện tại (`scripts/e10_relational_geometry.py`) hoá ra đã
+sẵn 2 optimization mà "Engineering notes" của `HANDOFF.md` liệt kê là "chưa sửa" (mask chỉ build 1
+lần/ảnh qua dict `image_data`, và `pool_regions_batched` gộp interpolate cho cả 4 vùng thay vì gọi
+riêng) — nhiều khả năng phiên trước đã sửa xong ngay trước khi commit nhưng quên cập nhật câu chữ
+"chưa sửa" trong `HANDOFF.md`. Vì không có reference CSV nào của bản chưa-tối-ưu được lưu lại
+(`results/` gitignored, chưa từng tồn tại `results/e10_pilot_reference/` mà FROZEN SPEC comment
+nhắc tới), việc "verify equivalence" được làm bằng cách viết một harness riêng
+(`scripts/e10_equivalence_check.py`) dựng lại đúng code path naive cũ (`pool_regions_one_stage`
+gọi riêng lẻ từng vùng, build mask lặp lại) và so trực tiếp với code path hiện tại trên cùng
+feature đã load (không qua noise/RNG) — **kết quả: `max_abs_diff = 0.0` tuyệt đối** trên 17,838 giá
+trị relation, 3 backbone family (R50/Swin-two-stage/Swin-DINO-decoder). Hai optimization là
+bit-exact, không phải "gần đúng trong tolerance".
+
+**Bước 1 — Reproduce pilot trên `dev_50` bằng code đã tối ưu** (noise recraft mới, seed=42 mặc
+định của `craft.py`, không phải file tensor cũ vì `results/` trống trên checkout này). Table A
+(không phụ thuộc RNG) khớp pilot tới 3-4 số thập phân (`O↔E` global 0.7788 vs pilot 0.779,
+`E↔nearBG` 0.7610 vs 0.761, ...). Table B: `corr(ASR, disrupt_shared)` rerun = 0.625 (pilot 0.621),
+matched-pair giữ đúng hướng và tỷ lệ (Mask R50/Swin-T gap ~10.6x, pilot ~9.9x). Table C: 6/6 khớp
+dấu, đúng pattern đảo chiều cũ. **Kết luận bước 1: optimized script reproduce đúng pilot, an toàn
+để chạy `dev_300`.** Thời gian chạy full 6-model trên `dev_50`: **5 phút 49 giây** — nhanh hơn ~8
+lần so với con số ~48 phút `HANDOFF.md` ghi cho bản trước khi tối ưu.
+
+**Bước 2 — Craft `dev_300` (3 noise variant, 296/300 ảnh mỗi bộ, 4 ảnh skip do 0 GT box hợp lệ,
+giống mọi run khác trên manifest này)**: `osfd` (k=3, RRB on) 27m28s, `e3_k1_norrb` (k=1, no-RRB)
+13m33s, `e3_k1_rrb` (k=1, RRB on) 27m35s — tổng ~68m36s.
+
+**Bước 3 — Chạy `e10_relational_geometry.py` trên `dev_300`**: **32 phút 59 giây** (so với ước tính
+ngoại suy tuyến tính ~35 phút từ `dev_50` — khớp gần đúng, không có chi phí phi tuyến bất ngờ khi
+scale 6x). N=1206 object có dữ liệu hợp lệ ở cả 6 model tại last-stage (so với 194 ở pilot,
+đúng tỷ lệ ~6.2x).
+
+**Table A — clean relational invariance (`dev_300`, N=1206 object)**:
+
+| relation | R50 (3 cặp) | Swin (1 cặp) | cross-family | global | pilot global (N=49) |
+|---|---:|---:|---:|---:|---:|
+| O↔E | 0.859 | 0.559 | 0.742 | 0.753 | 0.779 |
+| O↔nearBG | 0.834 | 0.484 | 0.649 | 0.675 | 0.672 |
+| O↔farBG | 0.530 | 0.161 | **0.276** | 0.319 | 0.337 |
+| E↔nearBG | 0.875 | 0.729 | 0.763 | 0.783 | 0.761 |
+| E↔farBG | 0.550 | 0.417 | 0.461 | 0.476 | 0.482 |
+| nearBG↔farBG | 0.764 | 0.680 | 0.720 | 0.726 | 0.698 |
+
+**GO-A: PASS nhưng shared-set co lại còn 5/6** — `O↔farBG`'s `cross_family_consistency` tụt từ
+0.304 (pilot, sát ngưỡng) xuống **0.276 (dưới `GO1_CONSISTENCY_THR=0.30`)**, nên relation này
+**không còn nằm trong shared-set** dùng cho Table B/C (5 relation còn lại: `O↔E`, `O↔nearBG`,
+`E↔nearBG`, `E↔farBG`, `nearBG↔farBG`). Đây **đúng chính xác** kịch bản đã cảnh báo trước ở giới
+hạn #2 của §27 ("nếu scale N=300 cho kết quả tụt dưới 0.30 thì shared-set sẽ còn 5/6") — không phải
+một bất ngờ hay một lần rescue post-hoc, mà là điều đã được pre-register là có thể xảy ra. Điều
+kiện GO-A gốc (`≥2/6 relation qua ngưỡng`, `GO1_MIN_RELATIONS=2`) vẫn PASS rất thoải mái (5/6 ≫ 2).
+
+**Table B — attack disruption, giới hạn vào 5 relation shared mới**:
+
+| model | family | ASR | disrupt_shared (5-rel) | pilot disrupt_shared (6-rel, N=49) |
+|---|---|---:|---:|---:|
+| faster_rcnn_r50 | R50 (surrogate) | 99.37 | 0.3135 | 0.4040 |
+| dino_r50 | R50 | 99.45 | 0.3043 | 0.3459 |
+| mask_rcnn_r50 | R50 | 99.03 | 0.3083 | 0.3862 |
+| yolox_l | CSP | 67.88 | 0.2598 | 0.3369 |
+| mask_rcnn_swin_t | Swin | 68.62 | 0.0291 | 0.0388 |
+| dino_swin_l | Swin | 32.34 | 0.1504 | 0.1918 |
+
+(Giá trị tuyệt đối `disrupt_shared` giảm nhẹ so với pilot vì loại `O↔farBG` — relation có magnitude
+delta lớn nhất — khỏi tổng L2, không phải vì disruption thực sự yếu đi; so sánh đúng phải là
+tương quan/thứ tự, không phải giá trị tuyệt đối.)
+
+`corr(ASR, disrupt_shared)` qua 6 target = **+0.660** (pilot N=49: +0.621; rerun `dev_50`: +0.625)
+— **tăng nhẹ khi scale lên N lớn hơn**, không suy yếu. Matched-pair vẫn khớp hướng cả 2 cặp:
+
+- **DINO**: `disrupt_shared(dino_r50)=0.304 > disrupt_shared(dino_swin_l)=0.150`, cùng chiều
+  `ASR(dino_r50)=99.45 > ASR(dino_swin_l)=32.34` → khớp.
+- **Mask R-CNN**: `disrupt_shared(mask_rcnn_r50)=0.308 > disrupt_shared(mask_rcnn_swin_t)=0.029`
+  (~10.6x, pilot ~9.9x — gap giữ nguyên độ lớn) cùng chiều `ASR(mask_rcnn_r50)=99.03 >
+  ASR(mask_rcnn_swin_t)=68.62` → khớp.
+
+**GO-B: PASS, mạnh hơn pilot chứ không yếu đi.** `mask_rcnn_swin_t`'s `disrupt_shared` thấp bất
+thường so với ASR của nó (điểm ngoại lệ đã ghi nhận ở §27) **vẫn còn nguyên ở N=296** (0.029, thấp
+hơn cả `dino_swin_l` dù ASR cao hơn) — chưa có lời giải, không ảnh hưởng verdict nhưng vẫn là câu
+hỏi mở.
+
+**Table C — RRB mechanism, giới hạn vào 5 relation shared mới**:
+
+| model | family | Δ disruption (RRB−noRRB) | Δ ASR (RRB−noRRB) | khớp dấu? | pilot Δ disruption (N=49) | pilot Δ ASR |
+|---|---|---:|---:|---|---:|---:|
+| faster_rcnn_r50 | R50 | −0.115 | −10.7 | ✅ | −0.176 | −9.9 |
+| dino_r50 | R50 | −0.022 | −8.3 | ✅ | −0.020 | −8.4 |
+| mask_rcnn_r50 | R50 | −0.098 | −10.9 | ✅ | −0.155 | −11.7 |
+| yolox_l | CSP | +0.034 | +22.2 | ✅ | +0.043 | +28.7 |
+| mask_rcnn_swin_t | Swin | +0.015 | +26.4 | ✅ | +0.017 | +27.7 |
+| dino_swin_l | Swin | +0.043 | +13.6 | ✅ | +0.066 | +14.3 |
+
+**GO-C: PASS, 6/6 khớp dấu — reproduce chính xác pattern đảo chiều đã thấy ở pilot**: 3 target họ
+R50 (đã gần ceiling ASR ~97-99% dù RRB off) — thêm RRB làm giảm cả disruption lẫn ASR; 3 target khó
+(CSP/Swin, còn nhiều dư địa ASR) — thêm RRB làm tăng cả hai. Magnitude ở N=296 gần với pilot N=49,
+không có target nào đổi dấu.
+
+**Kết luận E10 dev_300 (confirmation, không phải discovery mới)**:
+
+> Scaling E10 from N=49 to N=296 confirms GO-B (correlation strengthens from 0.621 to 0.660,
+> both matched pairs hold with unchanged effect sizes) and GO-C (6/6 sign match reproduced exactly,
+> including the R50-saturates/CSP-Swin-improves flip) with no weakening. GO-A downgrades from 6/6
+> to 5/6 shared relations exactly as flagged as a risk before scaling (`O↔farBG`'s cross-family
+> consistency crosses below the pre-registered 0.30 threshold, 0.304→0.276) — this is an honest
+> shrinkage of the invariant set, not a falsification: the GO-A criterion itself (≥2/6) still
+> passes comfortably, and the two relations the user flagged as most interesting going in
+> (`O↔E`=0.742, `E↔nearBG`=0.763 cross-family) are among the strongest survivors, unchanged in
+> rank. The relational-geometry mechanism is confirmed at scale, with the `O↔farBG` component
+> specifically identified as not architecture-invariant enough to trust going forward.
+
+**Điểm đáng chú ý nhất cho bước tiếp theo (method derivation)**: đúng như user đã lưu ý trước khi
+chạy — 2 relation mạnh nhất và ổn định nhất qua cả 2 N (`O↔E` và `E↔nearBG`, cả hai đều liên quan
+trực tiếp đến **boundary E**) tiếp tục đứng đầu bảng ở `dev_300` (cross-family 0.742 và 0.763,
+cao nhất trong 5 relation còn lại), trong khi `O↔farBG` (không liên quan boundary, so interior với
+background xa) là relation duy nhất bị loại. Đây là bằng chứng bổ sung (không phải xác nhận
+thống kê chính thức, chỉ là quan sát nhất quán qua 2 N) cho hướng user đề xuất: invariant thật có
+thể tập trung vào **transition O→E→Bn** (foreground-to-background gần), không phải quan hệ chung
+chung với mọi vùng bao gồm cả far-background.
+
+**Trạng thái**: E10 đã đóng ở cả 2 tầng pilot (N=49) và confirmation (N=296) — **STRONG GO xác
+nhận, sẵn sàng cho bước tiếp theo là derive attack method mới từ relational invariant** (không phải
+OSFD + L_rel combine — theo đúng quyết định user đã nêu). Bước này CHƯA làm, cần quay lại với user
+trước khi bắt đầu (thiết kế method mới là quyết định lớn, không phải confirmation run thuần tuý).

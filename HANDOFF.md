@@ -5,18 +5,40 @@ không cần đọc lại toàn bộ `RESEARCH.md` từ đầu. `RESEARCH.md` v�
 mọi kết quả nghiên cứu (đặc biệt §21-§26 cho phiên này) — file này chỉ tóm tắt điều hướng +
 engineering context không nằm trong journal.
 
-**Cập nhật lần cuối**: 2026-09-06. Checkout vẫn không kế thừa state cũ: `results/` (gitignored) trống
-hoàn toàn khi phiên bắt đầu, thiếu cả 2 checkpoint `dino_r50`/`mask_rcnn_r50` (đã tải lại qua
-`mim download`, xem "Engineering notes"). Phiên 2026-09-06 chạy **E10 — Cross-Architecture
-Semantic-Region Relational Geometry** (`RESEARCH.md` §27, script mới `scripts/e10_relational_geometry.py`)
-— pilot N=49 trên `dev_50`, **STRONG GO cả 3 tầng** (existence, attack-relevance, RRB-mechanism), đọc
-kỹ §27 trước khi quyết định bước tiếp theo (đề xuất kế tiếp: scale `dev_300` để confirm, CHƯA làm,
-cần hỏi user trước vì compute cost đáng kể). Đây là kết quả dương mạnh nhất kể từ E6 — khác E6 (chỉ
-diagnostic, không tìm được cách biến thành objective tấn công qua E7-E9), E10 sinh ra một đại lượng
-đo được **từ chính surrogate** (không cần forward qua target), nên có đường đi rõ ràng để trở thành
-attack objective mới (`L_rel`, xem cuối §27's tinh thần gốc — chưa code). `scripts/craft.py` được
-thêm cờ `--no-rrb` (nhỏ, không phá gì cũ) để craft noise cho arm RRB-off mà không cần viết script
-riêng như E3 đã làm.
+**Cập nhật lần cuối**: 2026-09-08. Checkout mới (session mới): `results/` trống hoàn toàn khi bắt
+đầu, thiếu 2 checkpoint `dino_r50`/`mask_rcnn_r50` (đã tải lại qua `mim download`, cả 9 model đã
+verify qua `check_env.py`). Phiên này **CONFIRM E10 ở `dev_300`** theo đúng plan user đưa ra sau khi
+đọc pilot N=49 (§27): freeze spec → verify equivalence (code tối ưu vs naive) trên `dev_50` → chạy
+frozen E10 trên `dev_300`. Cả 3 bước đã xong, **STRONG GO xác nhận ở N=296** (`RESEARCH.md` §28) —
+đọc §28 trước khi làm gì tiếp, đặc biệt phần GO-A co từ 6/6 xuống 5/6 (đã dự đoán trước, không phải
+bất ngờ) và gợi ý cho method derivation (`O↔E`/`E↔nearBG` — liên quan boundary — mạnh nhất, ổn định
+nhất qua cả 2 N).
+
+**Việc CHƯA làm, cần user quay lại quyết định**: derive attack method mới từ relational invariant
+(không phải OSFD + L_rel combine, mà từ đầu, có thể bỏ hẳn suppress/amplify của OSFD — theo đúng
+hướng user đã nêu trước khi confirm dev_300). Đây là quyết định thiết kế lớn, KHÔNG tự làm tiếp
+trong phiên này dù dev_300 đã STRONG GO — user đã nói rõ dừng lại sau confirmation, không mở thêm
+diagnostic (không có "E11") và bước kế tiếp phải là prototype method mới, cần bàn trước khi code.
+
+**Phát hiện engineering đáng chú ý (không phải research finding)**: `scripts/e10_relational_geometry.py`
+đã commit sẵn 2 optimization mà "Engineering notes" (đoạn dưới, viết từ phiên 2026-09-06) liệt kê là
+"chưa sửa" — nhiều khả năng phiên đó đã sửa code ngay trước khi commit nhưng quên cập nhật câu chữ.
+Đã verify bằng harness riêng (`scripts/e10_equivalence_check.py`, mới viết phiên này) rằng 2
+optimization này bit-exact (`max_abs_diff=0.0`) so với naive path — an toàn, không cần lo lại.
+Timing thực tế: full 6-model trên `dev_50` chỉ mất 5m49s (không phải ~48 phút như note cũ đoán cho
+bản chưa tối ưu), trên `dev_300` mất 32m59s — tối ưu này tự nó đã đủ, KHÔNG cần làm thêm optimization
+nào khác (vd load-all-model-simultaneously) trước khi scale tiếp nếu có N lớn hơn trong tương lai.
+
+---
+
+**MỚI NHẤT TRƯỚC ĐÓ (2026-09-06)** — chạy **E10 — Cross-Architecture Semantic-Region Relational
+Geometry** (`RESEARCH.md` §27, script mới `scripts/e10_relational_geometry.py`) — pilot N=49 trên
+`dev_50`, **STRONG GO cả 3 tầng** (existence, attack-relevance, RRB-mechanism). Đây là kết quả
+dương mạnh nhất kể từ E6 — khác E6 (chỉ diagnostic, không tìm được cách biến thành objective tấn
+công qua E7-E9), E10 sinh ra một đại lượng đo được **từ chính surrogate** (không cần forward qua
+target), nên có đường đi rõ ràng để trở thành attack objective mới (`L_rel`, xem cuối §27's tinh
+thần gốc — chưa code). `scripts/craft.py` được thêm cờ `--no-rrb` (nhỏ, không phá gì cũ) để craft
+noise cho arm RRB-off mà không cần viết script riêng như E3 đã làm.
 
 Phiên trước (2026-09-05) chạy 4 thực nghiệm: **E6 — Backbone Adversarial Response
 Coupling** (`RESEARCH.md` §23, GO sau audit jackknife), **E7 — Downstream Amplification**
@@ -29,6 +51,12 @@ thích hết (đều NO-GO); E9 thử chuyển sang can thiệp trực tiếp (c
 
 ## Trạng thái hiện tại (quan trọng nhất, đọc trước)
 
+**[SUPERSEDED bởi phiên 2026-09-08 — xem đầu file + `RESEARCH.md` §28]** Đoạn dưới đây là snapshot
+pilot N=49, giữ nguyên để trace lịch sử. `dev_300` (N=296) đã confirm xong: STRONG GO giữ vững
+(GO-B corr 0.62→0.66, GO-C 6/6 không đổi), GO-A co từ 6/6 xuống 5/6 (`O↔farBG` rớt khỏi shared-set,
+đã dự đoán trước ở giới hạn #2 của §27, không phải bất ngờ). Không cần chạy thêm N lớn hơn nữa cho
+câu hỏi confirmation này — bước tiếp theo là method derivation, chưa làm, cần user quyết định.
+
 **MỚI NHẤT (2026-09-06) — E10 Cross-Architecture Semantic-Region Relational Geometry: STRONG GO,
 pilot N=49, chưa scale.** Xem `RESEARCH.md` §27 để có đầy đủ số liệu/bảng. Tóm tắt cực ngắn: định
 nghĩa 4 vùng ngữ nghĩa quanh mỗi GT box (interior O / boundary E / near-bg Bn / far-bg Bf), đo quan
@@ -40,8 +68,7 @@ hai) và khó (CSP/Swin, RRB làm tăng cả hai) — bằng chứng mạnh hơn
 `results/e10_relational_{clean,delta}.csv` (chi tiết per-object/per-stage) +
 `results/e10_table_{A,B,C}_*.csv`. Noise dùng: recraft mới trên `dev_50` — `results/noise/dev_50/
 {osfd,e3_k1_norrb,e3_k1_rrb}/` (osfd = k=3 RRB on chuẩn; 2 arm còn lại tái tạo đúng hyperparameter
-E3 cũ để đo Q3). **Chưa quyết định/chạy scale `dev_300`** — cần hỏi user trước (ước tính nhiều giờ
-compute nếu giữ nguyên script hiện tại; xem "Engineering notes" về tối ưu có thể làm trước khi scale).
+E3 cũ để đo Q3).
 
 **MỚI NHẤT TRƯỚC ĐÓ (2026-09-05) — E6 Backbone Adversarial Response Coupling: ĐÃ ĐÓNG (GO, đọc thận trọng
 sau audit)**, mechanism candidate cho H1 (`RESEARCH.md` §23, script `scripts/e6_response_coupling.py`).
