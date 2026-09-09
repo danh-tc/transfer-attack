@@ -2,8 +2,72 @@
 
 Mục đích: cho phiên Claude tiếp theo đọc nhanh để tiếp tục đúng ngữ cảnh sau khi máy restart,
 không cần đọc lại toàn bộ `RESEARCH.md` từ đầu. `RESEARCH.md` vẫn là nguồn sự thật đầy đủ cho
-mọi kết quả nghiên cứu (đặc biệt §21-§26 cho phiên này) — file này chỉ tóm tắt điều hướng +
+mọi kết quả nghiên cứu (đặc biệt §29-31 cho phiên này) — file này chỉ tóm tắt điều hướng +
 engineering context không nằm trong journal.
+
+**Cập nhật lần cuối**: 2026-09-09 (muộn nhất, sau cả DBTA). **Dòng method-derivation từ E10 ĐÃ ĐÓNG
+HẲN** (TGA §29 → DBTA §30 → BTFA §31) — KHÔNG mở lại dòng này trong phiên sau mà không có lý do mới
+hẳn (không phải retune/mở rộng biến thể, project đã cấm rõ). Candidate cuối, **BTFA (Boundary
+Transition Field Attack, §31)**: thay dense point-sampling của DBTA bằng 1 continuous field (signed-
+distance function quanh mỗi GT box + directional derivative của feature map dọc normal của field) —
+đạt **white-box 96.8%** (tốt nhất trong 3 candidate, gần sát OSFD's 100%, xác nhận optimization không
+còn là bottleneck) nhưng **vẫn NO-GO so với OSFD trên hard target** (delta −7.2 đến +1.0, 0/3 đạt
+ngưỡng +5) dù thắng DBTA trên 2/3 hard target (đặc biệt `mask_rcnn_swin_t` +3.1, đúng điểm yếu nhất
+của DBTA). User xác nhận đóng hẳn cả dòng.
+
+**Kết luận quan trọng nhất của cả chuỗi §29-31 (đọc kỹ trước khi nghĩ tới hướng mới liên quan E10)**:
+> Architecture-shared DIAGNOSTIC structure ⇏ architecture-shared ADVERSARIAL DIRECTION. E10's
+> relational invariant (O↔E/E↔nearBG) là có thật, confirmed N=296, KHÔNG bị đảo ngược. Nhưng "attack
+> trực tiếp chính invariant đó" (3 công thức hóa khác nhau: pooled-scalar rank/magnitude → discrete
+> point transition → continuous field transition) đều KHÔNG đủ để tạo ra method vượt OSFD, dù
+> white-box optimization cuối cùng đã mạnh ngang OSFD (BTFA). Bottleneck là property transfer-specific
+> của cái objective ascend, không phải sparsity/optimization — 2 câu hỏi "cái gì nhiều architecture
+> cùng biểu diễn" và "cái gì tạo ra adversarial direction transfer được" đã được chứng minh KHÔNG
+> tương đương.
+
+**2 bug kỹ thuật quan trọng bắt được khi làm DBTA+RRB (đáng nhớ cho code tương lai)**:
+1. **Sample point không theo kịp RRB transform**: lần thử RRB đầu tiên tái dùng tọa độ canvas cố
+   định (tính từ GT box gốc) cho object trên ảnh ĐÃ bị `rrb_forward` xoay+resize — object thật đã di
+   chuyển, sample nhầm background → collapse y hệt TGA (−38 điểm). Sửa bằng cách track transform
+   params (góc/tâm xoay, resize scale/pad) mỗi lần RRB draw rồi áp lại lên sample point trước khi
+   `grid_sample` (`transfer_attack/dbta.py::rrb_forward_with_params`/`rotate_points`/
+   `resize_pad_resize_points` — **2 công thức point-transform đã verify thực nghiệm** bằng ảnh
+   synthetic có 1 pixel sáng, KHÔNG suy từ tài liệu/đoán dấu, vì công thức "đoán ngây thơ" cho rotation
+   sai dấu so với `torchvision.transforms.functional.rotate`'s convention thật).
+2. **`evaluate.py` cache adversarial prediction theo `(model, attack_tag)` không theo nội dung
+   noise** — nếu re-craft cùng attack tag với code khác (như khi fix bug #1) mà giữ `predictions_dir`
+   cố định, eval âm thầm dùng lại prediction CŨ từ noise hỏng. Bắt được qua log bất thường "0
+   computed + cached, N from cache" ở smoke-test ngay sau fix. Đã sửa `scripts/dbta_v0_pilot.py`
+   dùng `predictions_dir` timestamp riêng mỗi lần chạy (giống `run_attack.py`'s convention vốn đã
+   đúng) — **nếu viết pilot script mới có nhiều lần re-run cùng attack tag, nhớ pattern này**, không
+   dùng đường dẫn `predictions_dir` cố định.
+
+Code mới từ cả chuỗi (giữ lại, không dọn dẹp — dùng được cho method tương lai cần region-relational/
+boundary-sampling/field machinery, dù dòng E10-derived đã đóng): `transfer_attack/regions.py` +
+`transfer_attack/losses.py`'s TGA functions, `transfer_attack/dbta.py` (boundary-contour sampling +
+RRB-aware point-transform, `rotate_points`/`resize_pad_resize_points` đã verify thực nghiệm — có thể
+tái dùng cho bất kỳ method tương lai nào cần point-tracking qua RRB), **`transfer_attack/btfa.py`**
+(mới — signed-distance field, directional-derivative-via-Sobel, không hỗ trợ RRB), `transfer_attack/
+attack.py` thêm `attack_type="dbta"`/`"btfa"` (`AttackConfig` có đủ params, xem code), `scripts/
+dbta_v0_pilot.py` + `scripts/btfa_v0_pilot.py` (pilot script pattern: N/steps configurable, mỗi
+variant so đúng baseline, `predictions_dir` timestamp riêng mỗi lần chạy — xem bug #2 dưới).
+
+**Việc CHƯA làm, cần user quay lại quyết định** (KHÔNG tự chọn mà không hỏi — quyết định thiết kế
+lớn giống quyết định bắt đầu TGA/DBTA/BTFA, và dòng E10-derived đã đóng nên đây PHẢI là hướng MỚI,
+không phải biến thể của TGA/DBTA/BTFA): tìm attack principle khác dựa trên "cái gì tạo ra transferable
+adversarial gradient/direction" — không phải "cái gì được nhiều architecture cùng biểu diễn/bất biến"
+(2 câu hỏi đã chứng minh không tương đương qua §29-31, xem kết luận ở trên). Ứng viên khả dĩ cần bàn
+với user trước khi code: quay lại roadmap N6-B (§16-22, method mạnh nhất đã xác nhận, không liên quan
+E10) để tìm hướng mở rộng khác, hoặc một hướng nghiên cứu hoàn toàn mới không dựa trên E10.
+
+**Checkpoint mới tải trong phiên này** (không có sẵn trên checkout mới, giống `dino_r50`/
+`mask_rcnn_r50` đã ghi chú cũ bên dưới — mim download lại nếu checkout mới thiếu):
+`dino-4scale_r50_8xb2-12e_coco_20221202_182705-55b2bba2.pth` (~263MB),
+`mask_rcnn_r50_fpn_1x_coco_20200205-d4b0c5d6.pth` (~178MB, chú ý: kiểm tra kích thước file đầy đủ
+trước khi dùng — nếu `ls` bắt đúng lúc download chưa xong sẽ thấy size nhỏ bất thường, đã gặp lỗi
+này trong phiên và verify lại bằng cách load state_dict + đếm tổng tham số khớp ~44.4M).
+
+---
 
 **Cập nhật lần cuối**: 2026-09-08. Checkout mới (session mới): `results/` trống hoàn toàn khi bắt
 đầu, thiếu 2 checkpoint `dino_r50`/`mask_rcnn_r50` (đã tải lại qua `mim download`, cả 9 model đã

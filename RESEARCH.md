@@ -2246,3 +2246,323 @@ chung với mọi vùng bao gồm cả far-background.
 nhận, sẵn sàng cho bước tiếp theo là derive attack method mới từ relational invariant** (không phải
 OSFD + L_rel combine — theo đúng quyết định user đã nêu). Bước này CHƯA làm, cần quay lại với user
 trước khi bắt đầu (thiết kế method mới là quyết định lớn, không phải confirmation run thuần tuý).
+
+## 29. TGA — Semantic Transition Geometry Attack: method-derivation từ E10, NO-GO (3 biến thể)
+
+Bước method-derivation mà §27-28 để ngỏ: derive một attack objective trực tiếp từ relational
+invariant O↔E/O↔nearBG/E↔nearBG (không phải OSFD + L_rel combine, mà từ đầu, bỏ hẳn cơ chế
+suppress-object/amplify-vicinal của OSFD). Đặt tên **TGA (Transition-Geometry Attack)**: thay vì tấn
+công độ lớn/hướng của raw feature tại object, tấn công trực tiếp **quan hệ tương đối** giữa 3 vùng
+O (interior), E (boundary), Bn (near-background) — đúng 3 vùng trong "transition" O→E→Bn mà E10 xác
+định là mạnh và ổn định nhất qua cả N=49 và N=296 (§28's "2 relation mạnh nhất... đều liên quan trực
+tiếp đến boundary E"). **Bỏ hẳn far-background (Bf)**: `O↔farBG` là relation DUY NHẤT rớt khỏi
+shared-set khi scale N=49→296 (§28), nên v0 không đưa Bf vào method để giữ novelty story sạch và
+tránh dùng đúng phần yếu nhất của invariant.
+
+**Thiết kế v0 (chốt trước khi chạy, theo đúng đặc tả user đưa ra)**: RRB OFF cho mọi biến thể (cô
+lập xem bản thân relational objective có tín hiệu hay không, trước khi trộn augmentation vào); region
+definition verbatim từ FROZEN SPEC của E10 (`shrink_frac=0.125`, `expand_frac=0.25`,
+`MASK_MIN_STAGE_CELLS=1.0` — code mới `transfer_attack/regions.py`, copy tách biệt để không đụng vào
+script E10 đã frozen/verified). Hai công thức loss, test cô lập từng cái trước khi nghĩ tới combine:
+
+- **Rank (v0 chính)** — đọc ordering `s_ij = sign(r_clean_i - r_clean_j)` từ chính ảnh clean cho mỗi
+  cặp trong 3 relation `{OE, OBn, EBn}`, ascend `L_rank = Σ softplus(-s_ij·(r_adv_i - r_adv_j)/T)`
+  (T=1.0, không tune) để đảo ngược ordering đó (`transfer_attack/losses.py::tga_rank_loss`).
+- **Geom** — `L_geom = ‖r̂_adv - r̂_clean‖²` với `r̂ = r/(‖r‖₂+eps)` (magnitude-based, thử sau khi rank
+  NO-GO — xem chẩn đoán bên dưới), `tga_geom_loss`.
+- Cả 2 average qua **mọi backbone stage** (mặc định) hoặc riêng **last-stage-only** (cờ
+  `tga_last_stage_only`, phạm vi mà E10 thực sự đã confirm invariant).
+
+Code: `transfer_attack/regions.py` (mask O/E/Bn/Bf + pooling, differentiable), `transfer_attack/
+losses.py` (`tga_relational_vector`, `tga_rank_loss`, `tga_geom_loss`, `tga_loss`), tích hợp
+`attack_type="tga"` vào `transfer_attack/attack.py::craft_one_image` (tái dùng nguyên vòng lặp
+I-FGSM+MI-momentum, không viết loop riêng). Pilot script mới `scripts/tga_v0_pilot.py`.
+
+**GO criterion (pre-register trước khi chạy)**: Strong GO nếu TGA thắng OSFD-noRRB ≥+5 điểm ASR
+trên ≥2/3 hard target (`yolox_l`, `mask_rcnn_swin_t`, `dino_swin_l`) và không collapse >20 điểm trên
+target còn lại; Weak GO nếu chỉ thắng rõ trên `dino_swin_l`; còn lại NO-GO.
+
+**Kết quả (N=20, 100 step, `dev_50`, 6 model — đúng model set E10 dùng,
+`results/tga_v0_pilot_summary.csv` + `results/tga_v0_lastonly_summary.csv` +
+`results/tga_v0_geom_summary.csv`)**:
+
+| model | group | osfd_norrb | mi_fgsm | tga_rank (all-stage) | tga_rank (last-stage) | tga_geom (all-stage) |
+|---|---|---:|---:|---:|---:|---:|
+| faster_rcnn_r50 (white-box surrogate) | — | 95.7 | 95.7 | 66.0 | 73.4 | 56.4 |
+| yolox_l | B | 22.8 | 18.8 | 5.9 | 5.9 | 4.0 |
+| dino_swin_l | C | 9.0 | 14.0 | 5.0 | 3.0 | 4.0 |
+| mask_rcnn_swin_t | C | 23.7 | 21.6 | 6.2 | 8.2 | 6.2 |
+| dino_r50 | D | 100.0 | 92.6 | 61.7 | 61.7 | 44.7 |
+| mask_rcnn_r50 | D | 100.0 | 98.9 | 68.1 | 65.9 | 44.0 |
+
+**NO-GO rõ ràng, cả 3 biến thể, không có ngoại lệ trên bất kỳ model nào** — kể cả `dino_swin_l`
+(Weak-GO criterion cũng fail: cả 3 biến thể đều ÂM trên chính target Swin khó nhất, target mà TGA
+được kỳ vọng cải thiện nhất). Đáng chú ý nhất: TGA thua ngay cả ở **white-box surrogate** (−22 đến
+−39 điểm so với OSFD-noRRB, và thua cả MI-FGSM) — đây không phải câu chuyện "không transfer", mà là
+bản thân loss objective tạo ra adversarial perturbation yếu hơn hẳn, kể cả tấn công chính model dùng
+để craft.
+
+**Tuần tự chẩn đoán (mỗi bước đều pre-register trước khi chạy tiếp, không phải retune sau khi thấy
+số xấu)**:
+1. `tga_rank` (all-stage) NO-GO → nghi ngờ multi-stage average pha loãng tín hiệu (E10 chỉ confirm
+   invariant ở last-stage, chưa test stage nông hơn — limitation đã ghi ở §27).
+2. `tga_rank` (last-stage-only, đúng phạm vi E10 confirm) → **pattern gần như y hệt** (surrogate
+   66.0→73.4, các target khác không đổi hoặc còn tệ hơn) — loại trừ giả thuyết "sai stage". Vấn đề
+   nằm ở chính công thức loss, không phải phạm vi stage.
+3. Chẩn đoán kỹ thuật từ chính công thức: `softplus(-s_ij·diff/T)` có đuôi giảm theo hàm mũ khi
+   `diff` đã lệch xa đúng chiều clean ordering (`z≪0` → `softplus(z)≈exp(z)≈0`, gradient cũng ≈0) —
+   nghĩa là mọi cặp relation mà ảnh clean vốn đã tách biệt rõ gần như không đóng góp gradient suốt
+   phần lớn quá trình optimize, bất kể chọn stage nào.
+4. Thử `tga_geom` (magnitude-based, không có failure mode vanishing-gradient này theo construction)
+   → **vẫn NO-GO, thậm chí tệ hơn rank trên nhóm R50** (`dino_r50` −55.3 so với rank's −38.3,
+   `mask_rcnn_r50` −56.0 so với −31.9), chỉ xấp xỉ ngang rank trên 3 hard target. Loại trừ luôn giả
+   thuyết "vanishing gradient là nguyên nhân chính" — đổi công thức không sửa được vấn đề.
+
+**Kết luận cuối (đóng, không thử `rank_geom` combine hay tune thêm — tổ hợp tuyến tính của 2 thành
+phần đều đã NO-GO độc lập khó có khả năng đột biến thành mạnh, và đã test đủ 2 công thức hợp lý ×
+2 phạm vi stage cho rank để kết luận có kỷ luật)**:
+
+> Attacking the RELATIVE ordering or magnitude of distances between an object's interior (O),
+> boundary (E) and near-background (Bn) — the exact relational signature E10 confirmed as a
+> reproducible cross-architecture invariant — fails as a direct optimization objective. All 3
+> variants tested (rank-based, all backbone stages; rank-based, last stage only; magnitude-based,
+> all stages) lose to OSFD-noRRB on EVERY model tested, including a 22-39 ASR point loss on the
+> WHITE-BOX surrogate itself — not merely a transfer failure but a fundamentally weak ascent
+> objective. Restricting to E10's actually-confirmed last stage does not fix the rank variant
+> (identical failure pattern), and switching from a rank-inversion loss (diagnosed as having a
+> vanishing gradient for well-separated clean relations) to a magnitude-based loss does not fix it
+> either (uniformly equal or worse). The likely root cause: a 3-scalar-per-object relational
+> signature is far too sparse a gradient signal compared to OSFD's dense per-channel backbone-
+> feature MSE, regardless of how that signature is turned into a loss. E10's discovery (a
+> confirmed, reproducible diagnostic invariant) does not transfer into a competitive attack
+> objective by attacking it directly — this closes the "attack the E10 invariant directly" line of
+> method derivation.
+
+**Việc KHÔNG làm (quyết định rõ, tránh redo)**: không thử `rank_geom` (tổ hợp tuyến tính của L_rank
++ λ·L_geom) — cả 2 thành phần đã NO-GO độc lập, đúng kỷ luật "không tune/combine để cứu candidate"
+áp dụng xuyên suốt project (MVC §9, RCG §9, N2-B §12, DOB §15, E9 §26). Không thử thêm biến thể
+temperature/shrink_frac/expand_frac khác — đây là hyperparameter search để cứu kết quả xấu, không
+phải chẩn đoán cơ chế. Không thêm RRB vào TGA (bước 9 trong plan gốc, chỉ có ý nghĩa nếu v0-noRRB đã
+có tín hiệu dương — không áp dụng nữa vì cả 3 v0 đều NO-GO).
+
+**Trạng thái sau §27-29 (một phần được §30 dưới đây làm rõ thêm)**: E10 vẫn là mechanism/diagnostic
+discovery mạnh nhất và sạch nhất của toàn project (relational invariant tồn tại thật, confirmed ở
+N=296) — TGA (rank/geom, pooled-scalar) không tự động chuyển thành attack objective cạnh tranh được
+với OSFD. Nhưng §30 cho thấy nguyên nhân cụ thể hơn dự đoán ban đầu: không phải bản thân invariant vô
+dụng, mà là cách **pool về 1 scalar/object** làm mất quá nhiều tín hiệu — giữ lại cấu trúc không gian
+(DBTA) cải thiện đáng kể (từ NO-GO trắng trợn sang cạnh tranh thật ở white-box). Roadmap "prove" cho
+N6-B (§16-22, method mạnh nhất đã xác nhận của project trước E10) không bị ảnh hưởng bởi các kết quả
+E10-derivation này.
+
+## 30. DBTA — Dense Boundary-Transition Attack: cải thiện rõ so với TGA nhưng RRB không thu hẹp gap
+
+Đề xuất ngay sau TGA đóng (§29), dựa đúng chẩn đoán thất bại của TGA: 3 scalar/object (pooled mean
+của O/E/Bn) là tín hiệu quá thưa để làm attack objective, bất kể rank hay magnitude. **DBTA giữ
+nguyên margin `shrink_frac=0.125`/`expand_frac=0.25`** (đúng frozen spec E10/TGA) nhưng **không pool
+region về 1 vector** — thay vào đó, sample một trường điểm DÀY dọc theo **chính perimeter của GT
+box** (mỗi điểm `p` trên biên box, tạo 3 điểm đồng tâm: `p_O` dịch vào trong theo `shrink_frac`, `p_E
+= p`, `p_B` dịch ra ngoài theo `expand_frac`), đọc feature tại từng điểm qua `F.grid_sample`
+(differentiable, stage-agnostic vì tọa độ chuẩn hóa theo H/W của chính stage đó). Loss ascend MSE
+thô (không rank, không normalize — học từ TGA rằng vấn đề là độ thưa chứ không phải công thức) giữa
+transition vector `T(p) = [f_E(p)-f_O(p) ; f_B(p)-f_E(p)]` của adv so với clean, trung bình qua mọi
+điểm × object × stage. Code: `transfer_attack/dbta.py`, tích hợp `attack_type="dbta"` vào
+`transfer_attack/attack.py`. Pilot: `scripts/dbta_v0_pilot.py`.
+
+**Thiết kế pre-registered**: KHÔNG nhảy thẳng vào so sánh transfer — kiểm tra **white-box sanity**
+trước (DBTA có phải một objective ascent cạnh tranh trên chính surrogate dùng để craft hay không),
+vì TGA thất bại ngay ở mức này (thua cả white-box), không phải ở transfer. Ngưỡng: FAIL nếu ASR
+white-box thua OSFD-noRRB > `WB_COLLAPSE_THR=20` điểm (giống mức TGA đã fail); chỉ đọc hard-target
+delta nếu PASS.
+
+**Round 1 (RRB OFF, N=20/100-step, `dev_50`, `results/dbta_v0_pilot_summary.csv`)**:
+
+| model | group | osfd_norrb | dbta_norrb | Δ |
+|---|---|---:|---:|---:|
+| faster_rcnn_r50 (white-box) | — | 95.7 | 90.4 | **−5.3** |
+| yolox_l | B | 22.8 | 20.8 | −2.0 |
+| dino_swin_l | C | 9.0 | 9.0 | +0.0 |
+| mask_rcnn_swin_t | C | 22.7 | 11.3 | −11.3 |
+| dino_r50 | D | 100.0 | 93.6 | −6.4 |
+| mask_rcnn_r50 | D | 100.0 | 94.5 | −5.5 |
+
+**WHITE-BOX SANITY PASS rõ ràng** — lệch chỉ −5.3 điểm (so với TGA's −22 đến −39 trên MỌI model),
+xác nhận đúng chẩn đoán "sparsity là nguyên nhân chính, không phải rank-vs-magnitude". Trên hard
+target: `yolox_l` gần hòa (−2.0), `dino_swin_l` **hòa tuyệt đối** (+0.0, đúng target khó nhất project
+muốn cải thiện), `mask_rcnn_swin_t` vẫn kém rõ (−11.3, điểm yếu nhất, khớp với E10's ghi nhận
+`mask_rcnn_swin_t` có `disrupt_shared` bất thường thấp so với ASR của nó — câu hỏi mở chưa giải thích
+được xuyên suốt project). Chưa đạt GO (`≥+5` trên `≥2/3` hard target) nhưng khác hẳn TGA: đây là
+"sanity PASS, transfer chưa thắng" — trạng thái đáng đầu tư thêm, không phải NO-GO ngay.
+
+**Round 2 — thêm RRB (lockstep với hướng đã dùng project-wide để tăng transfer)**: lần thử đầu tiên
+**tái dùng nguyên `boundary_contour_points` tính 1 lần trên ảnh clean** cho cả 2 augmented view của
+RRB — **collapse mạnh, quay lại đúng cấp độ thất bại của TGA** (white-box −38.3, mọi hard target âm
+sâu). **Chẩn đoán đúng nguyên nhân (không phải objective yếu)**: `rrb_forward` xoay+resize TOÀN BỘ
+ảnh trước khi forward qua backbone; OSFD không bị ảnh hưởng vì loss của nó là MSE feature-map không
+phụ thuộc vị trí cụ thể, nhưng DBTA sample tại **tọa độ canvas cố định** (tính từ GT box gốc, chưa
+xoay) — sau khi ảnh bị xoay, object thật đã "di chuyển" sang vị trí khác, DBTA vẫn sample tọa độ cũ
+→ đọc nhầm feature của background/vùng không liên quan, nặng nhất ở các điểm biên (xa tâm xoay nhất).
+
+**Sửa đúng**: viết `rrb_forward_with_params` (tái tạo độc lập đúng phân phối random của
+`transfer_attack/augment.py`'s `random_axis_rotation`/`adaptive_random_resizing` — KHÔNG sửa/gọi lại
+code gốc, để noise OSFD hiện có không bị ảnh hưởng) trả về thêm transform params (góc xoay, tâm xoay,
+resize scale/pad) mỗi lần draw; `rotate_points`/`resize_pad_resize_points` áp lại đúng transform đó
+lên tọa độ sample point trước khi `grid_sample` trên feature map đã augment. **Cả 2 công thức
+point-transform được verify thực nghiệm** (không suy từ tài liệu/đoán dấu) bằng ảnh synthetic có 1
+pixel sáng đã biết tọa độ, so khớp với hành vi thật của `torchvision.transforms.functional.rotate`
+và `F.interpolate(align_corners=True)` — phát hiện công thức rotation "đoán ngây thơ" (ma trận xoay
+chuẩn CCW) sai dấu so với convention thật của `torchvision`.
+
+**Bug thứ hai bắt được trong quá trình fix (methodology, không phải DBTA)**: `evaluate.py` cache
+adversarial prediction theo `(model, attack_tag)` **không theo nội dung noise**. Pilot script dùng
+`predictions_dir` cố định (không timestamp) — sau khi sửa code craft và re-run cùng attack tag, eval
+âm thầm tái dùng prediction cũ từ noise HỎNG trước khi fix (bắt được qua log "0 computed + cached, N
+from cache" bất thường ở lần smoke-test đầu sau fix). Đã sửa `scripts/dbta_v0_pilot.py` dùng
+`predictions_dir` timestamp riêng mỗi lần chạy script (giống convention `run_attack.py` vốn đã làm
+đúng việc này) — không có bug này trong `scripts/tga_v0_pilot.py` (mỗi TGA-variant dùng tag riêng
+biệt, không bao giờ redo cùng tag với code khác nhau).
+
+**Round 2 sau khi fix (N=20/100-step, `results/dbta_v0_rrb_summary.csv`)**:
+
+| model | group | osfd_norrb | dbta_norrb | osfd (RRB) | dbta_rrb | Δ norrb | Δ RRB |
+|---|---|---:|---:|---:|---:|---:|---:|
+| faster_rcnn_r50 (white-box) | — | 95.7 | 90.4 | 98.9 | 90.4 | −5.3 | −8.5 |
+| yolox_l | B | 22.8 | 20.8 | 81.2 | 46.5 | −2.0 | **−34.7** |
+| dino_swin_l | C | 9.0 | 9.0 | 34.0 | 25.0 | +0.0 | **−9.0** |
+| mask_rcnn_swin_t | C | 22.7 | 11.3 | 82.5 | 33.0 | −11.3 | **−49.5** |
+| dino_r50 | D | 100.0 | 93.6 | 100.0 | 89.4 | −6.4 | −10.6 |
+| mask_rcnn_r50 | D | 100.0 | 94.5 | 98.9 | 90.1 | −5.5 | −8.8 |
+
+**WHITE-BOX SANITY PASS sau fix** (−8.5, khớp lại đúng biên độ round 1, xác nhận fix hình học đúng —
+không còn collapse kiểu TGA). Nhưng **hard-target gap RỘNG RA thay vì thu hẹp**: DBTA tự nó CÓ tăng
+tuyệt đối khi thêm RRB (`yolox_l` +25.7, `mask_rcnn_swin_t` +21.7, `dino_swin_l` +16.0 so với
+`dbta_norrb`) — RRB không vô dụng với DBTA — nhưng OSFD tăng MẠNH HƠN NHIỀU cùng lúc (`yolox_l`
++58.4, `mask_rcnn_swin_t` +59.8, `dino_swin_l` +25.0), nên khoảng cách tương đối giữa 2 method nới
+rộng thay vì thu hẹp, rõ nhất ở `mask_rcnn_swin_t` (−11.3 → −49.5) và `yolox_l` (−2.0 → −34.7).
+
+**Kết luận (theo quyết định user, không chạy thêm steps/tune để cứu hướng RRB)**:
+
+> DBTA's dense per-point boundary-transition objective is a competitive white-box ascent target
+> (unlike TGA's pooled-scalar rank/geom losses, which collapsed even against their own surrogate) --
+> confirming that signal SPARSITY, not loss shape, was TGA's root failure. However, adding RRB (this
+> project's single largest known transfer driver, +13 to +31 ASR points for OSFD per E3) does not
+> close the gap to OSFD -- it widens it, because OSFD's global feature-map MSE benefits far more from
+> RRB's multi-view averaging than DBTA's localized per-point objective does. RRB integration required
+> a real geometric fix first (naive reuse of clean-frame sample points under RRB's rotate+resize
+> collapsed identically to TGA, -38 ASR points on the white-box surrogate) -- after fixing it
+> (tracking and re-applying the exact RRB transform to boundary points), white-box sanity is restored
+> but the RRB extension itself does not help DBTA's transfer story. The RRB line of extension is
+> closed; DBTA-noRRB (round 1, roughly tied with OSFD-noRRB on 2/3 hard targets, particularly
+> dino_swin_l) remains the candidate's best and current result.
+
+**Trạng thái**: DBTA chưa đạt GO (chưa thắng OSFD trên bất kỳ cấu hình nào đã thử) nhưng cũng không
+NO-GO sạch như TGA — nó là candidate đầu tiên sau TGA sống sót qua white-box sanity và chỉ thua sát
+nút trên 2/3 hard target ở cấu hình tốt nhất (no-RRB). **Việc CHƯA làm, cần bàn với user trước khi
+tiếp tục** (không tự chọn để tránh lặp lại việc mở rộng không xin phép): tăng `steps`/`n_points` cho
+riêng nhánh no-RRB (chưa thử, khác với việc "thêm RRB" đã đóng ở trên), điều tra vì sao
+`mask_rcnn_swin_t` luôn là điểm yếu nhất qua cả TGA và DBTA (câu hỏi mở từ E10), hay dừng hẳn dòng
+method-derivation từ E10 tại đây và coi E10 là đóng góp diagnostic thuần túy.
+
+**[SUPERSEDED bởi §31]** Đoạn "Việc CHƯA làm" ở trên là snapshot ngay sau khi DBTA đóng — user sau đó
+quyết định thử thêm 1 candidate cuối (BTFA, §31) thay vì tăng steps/n_points hay điều tra
+`mask_rcnn_swin_t` riêng lẻ; BTFA đã đóng luôn cả dòng method-derivation từ E10.
+
+## 31. BTFA — Boundary Transition Field Attack: candidate cuối, NO-GO — đóng hẳn dòng method-derivation từ E10
+
+Đề xuất ngay sau DBTA (§30), đúng logic tiến hóa: TGA nén O/E/Bn về 3 scalar/object (quá thưa, fail
+white-box) → DBTA giữ cấu trúc điểm rời rạc dọc perimeter (~24 điểm/object, pass white-box nhưng vẫn
+thưa về không gian, chỉ phủ đúng đường viền) → **BTFA thay hẳn bằng một trường liên tục**: dựng
+**signed-distance field** `S(x,y)` cho mỗi GT box (công thức SDF hình chữ nhật chuẩn — âm bên trong,
+0 đúng tại cạnh box, dương bên ngoài), giữ một **band** `-shrink_frac·repr_dim ≤ S ≤ expand_frac·
+repr_dim` (`repr_dim = √(box_w·box_h)`, gộp 2 margin theo trục của TGA/DBTA thành 1 scale đẳng hướng
+vì SDF là khoảng cách đẳng hướng), tính **normal direction** `n(p) = ∇S(p)/‖∇S(p)‖` (finite-difference
+Sobel, không cần gradient vì S là hình học cố định), rồi ascend MSE của **directional derivative**
+`D_nF(p) = ∇F(p)·n(p)` (Sobel áp lên chính feature map, có gradient) giữa adv và clean, trung bình
+qua mọi pixel trong band × object × stage. Đây chính là **giới hạn liên tục của DBTA's finite
+difference** `F_E-F_O`/`F_B-F_E` — không cần chọn discrete O/E/B triplet cho từng điểm nữa. Code:
+`transfer_attack/btfa.py`, tích hợp `attack_type="btfa"` vào `transfer_attack/attack.py` (RRB chưa hỗ
+trợ — raise `NotImplementedError` tường minh nếu gọi với `use_rrb=True`, tránh lặp lại lỗi hình học
+đã gặp ở DBTA round 2 nếu ai đó bật RRB mà không port field-based point-transform trước). Pilot:
+`scripts/btfa_v0_pilot.py` (4 arm: `osfd_norrb`/`dbta_norrb`/`btfa_norrb`/`mi_fgsm`, `dbta_norrb`
+craft lại mới trong cùng lần chạy để so sánh trực tiếp, không lấy số từ §30 do nhiễu GPU-nondeterminism
+run-to-run đã quan sát được ở DBTA — xem §30's 2 lần chạy "osfd" RRB-on khác nhau vài điểm dù cùng
+seed/code).
+
+**Thiết kế pre-registered, 2 pha** (chốt trước khi chạy): Pha 1 — **white-box gate tuyệt đối**
+(`ASR_btfa ≥ WB_MIN_ASR=80%` trên chính surrogate, không phải delta) vì TGA fail chính ở đây; nếu
+fail thì đóng ngay không cần đọc hard target. Pha 2 (chỉ đọc nếu Pha 1 pass) — so hard-target delta
+với CẢ `osfd_norrb` (chính, tiêu chí `≥+5` trên `≥2/3` hard target như TGA/DBTA) VÀ `dbta_norrb` (phụ,
+đặc biệt quan tâm `mask_rcnn_swin_t` — điểm yếu nhất của DBTA).
+
+**Kết quả (N=20, 100 step, `dev_50`, 6 model, `results/btfa_v0_pilot_summary.csv`)**:
+
+| model | group | osfd_norrb | dbta_norrb | btfa_norrb | mi_fgsm | Δ(btfa−osfd) | Δ(btfa−dbta) |
+|---|---|---:|---:|---:|---:|---:|---:|
+| faster_rcnn_r50 (white-box) | — | 100.0 | 95.7 | 96.8 | 100.0 | −3.2 | +1.1 |
+| yolox_l | B | 24.8 | 24.8 | 22.8 | 21.8 | −2.0 | −2.0 |
+| dino_swin_l | C | 10.0 | 9.0 | 11.0 | 13.0 | +1.0 | +2.0 |
+| mask_rcnn_swin_t | C | 22.7 | 12.4 | 15.5 | 22.7 | −7.2 | **+3.1** |
+| dino_r50 | D | 100.0 | 92.6 | 96.8 | 93.6 | −3.2 | +4.3 |
+| mask_rcnn_r50 | D | 100.0 | 94.5 | 93.4 | 100.0 | −6.6 | −1.1 |
+
+**Pha 1: PASS mạnh** — `96.8%` white-box, tốt nhất trong cả 3 candidate E10-derived (TGA: collapse
+sâu; DBTA: `90.4-95.7%`; BTFA: `96.8%`, gần sát ceiling `OSFD=100%` ở N=20 này). Xác nhận: dense field
+không hề yếu hơn dense point-sampling về mặt tối ưu — vấn đề của TGA thực sự chỉ là độ thưa của
+pooled-scalar, không phải "region-relational objective nói chung yếu".
+
+**Pha 2: so `osfd_norrb`, NO-GO** (0/3 hard target đạt `≥+5`; delta dao động hẹp `−7.2` đến `+1.0` —
+roughly tied, không phải thua đậm như DBTA+RRB). **So `dbta_norrb`: BTFA thắng trên 2/3 hard target**
+(`dino_swin_l` +2.0, và đặc biệt **`mask_rcnn_swin_t` +3.1** — đúng điểm DBTA yếu nhất, ủng hộ giả
+thuyết dense field khá hơn point-sampling rời rạc ở Swin hai-giai-đoạn) — nhưng cải thiện này KHÔNG
+đủ để BTFA tự nó vượt qua chính OSFD trên bất kỳ hard target nào.
+
+**Kết luận (đóng, theo đúng xác nhận của user — không sweep band width, không đổi derivative operator,
+không thêm RRB, không thêm OSFD auxiliary loss, không tăng steps, không tune stage weight)**:
+
+> BTFA closes the loop TGA opened: white-box ASR is no longer the bottleneck (96.8%, competitive with
+> OSFD's near-ceiling 100% and clearly recovered from TGA's white-box collapse), yet cross-architecture
+> transfer still does not beat OSFD (hard-target deltas -7.2 to +1.0, 0/3 at the pre-registered +5
+> threshold) even though BTFA is a strict representational upgrade over DBTA (a continuous field vs
+> discrete perimeter points) and beats DBTA on 2/3 hard targets, including DBTA's specific weak point
+> (mask_rcnn_swin_t, +3.1). Because white-box optimization strength can no longer explain the transfer
+> gap -- the objective converges just as well as OSFD's against the surrogate it was crafted on -- the
+> bottleneck must be a TRANSFER-specific property of what each objective ascends, not an optimization
+> or signal-density deficiency. This closes the "attack E10's relational invariant directly" line of
+> method derivation (TGA -> DBTA -> BTFA) as a disciplined falsification chain, not a dead end from
+> insufficient engineering effort: three qualitatively different operationalizations of the SAME
+> confirmed cross-architecture invariant (pooled scalar rank/magnitude, discrete point transition,
+> continuous field transition) were tried, and each ruled out a specific failure hypothesis for the
+> next (TGA's sparsity -> DBTA's white-box competence -> BTFA's still-insufficient transfer despite
+> full white-box strength).
+
+**Bài học chính (đáng nhớ hơn cả kết quả NO-GO)**:
+
+> Architecture-shared DIAGNOSTIC structure does not imply an architecture-shared ADVERSARIAL
+> DIRECTION. E10 confirmed a real, reproducible, cross-architecture invariant (the O<->E/E<->nearBG
+> relational signature) — that finding stands on its own and is not falsified by TGA/DBTA/BTFA's
+> NO-GOs. What §29-31 falsify is the STRONGER, unstated assumption the method-derivation attempt made:
+> that disrupting a structure multiple architectures are known to SHARE is the same as finding a
+> direction in input space that multiple architectures are simultaneously VULNERABLE to moving along.
+> A property can be common across representations (E10) without an attack on that property being
+> common in its effect (TGA/DBTA/BTFA) — diagnostic universality and adversarial transferability are
+> different claims, and this project's evidence now separates them cleanly for the first time.
+
+**Việc KHÔNG làm (quyết định rõ theo user, tránh redo)**: không thêm RRB vào BTFA (chưa port
+field-based point-transform, và DBTA's kinh nghiệm cho thấy RRB có thể làm RỘNG gap thay vì thu hẹp
+ngay cả khi hình học đúng — §30); không sweep band width (`shrink_frac`/`expand_frac`); không đổi
+derivative operator (Sobel → kernel khác); không thêm OSFD auxiliary loss (hướng "OSFD + L_rel
+combine" mà user đã loại trừ từ đầu §29 để giữ novelty sạch — giờ càng không có lý do quay lại, vì
+BTFA đã cho thấy ngay cả objective độc lập mạnh nhất cũng không đủ); không tăng `steps` (white-box đã
+gần ceiling, vấn đề không phải hội tụ); không tune stage-weight; không mở diagnostic riêng cho
+`mask_rcnn_swin_t` như một câu hỏi độc lập (đã có đủ evidence từ chính BTFA — cải thiện tương đối so
+DBTA nhưng vẫn không đủ so OSFD, không cần thêm 1 experiment giải thích riêng).
+
+**Trạng thái cuối**: **Dòng method-derivation từ E10 (TGA §29 → DBTA §30 → BTFA §31) ĐÃ ĐÓNG HẲN.**
+E10 (§27-28) vẫn đứng vững như mechanism/diagnostic discovery — relational invariant cross-architecture
+là có thật, confirmed ở N=296, KHÔNG bị đảo ngược bởi bất kỳ NO-GO nào ở trên. Nhưng con đường "biến
+diagnostic invariant thành attack objective bằng cách attack trực tiếp chính invariant đó" đã bị loại
+trừ có kỷ luật qua 3 công thức hóa khác nhau, không phải bỏ cuộc giữa chừng. Roadmap N6-B (§16-22,
+method mạnh nhất đã xác nhận của project, không liên quan tới E10) không bị ảnh hưởng. **Bước tiếp
+theo (chưa làm, cần bàn với user khi bắt đầu phiên sau)**: quay lại tìm attack principle mới dựa trên
+câu hỏi khác — "cái gì tạo ra transferable adversarial gradient/direction" thay vì "cái gì được nhiều
+architecture cùng biểu diễn/cùng bất biến" — hai câu hỏi đã được chứng minh là KHÔNG tương đương qua
+chuỗi §29-31.

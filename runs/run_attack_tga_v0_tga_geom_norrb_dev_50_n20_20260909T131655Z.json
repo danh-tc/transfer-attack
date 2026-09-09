@@ -1,0 +1,172 @@
+{
+  "timestamp": "20260909T131655Z",
+  "attack": "tga_v0_tga_geom_norrb",
+  "manifest": "data/manifests/dev_50.json",
+  "seed": 42,
+  "n_images": 20,
+  "score_thr": 0.3,
+  "iou_thr": 0.5,
+  "config": {
+    "attack_type": "tga",
+    "epsilon": 5.0,
+    "alpha": 1.0,
+    "steps": 100,
+    "mu": 1.0,
+    "k": 3.0,
+    "use_rrb": false,
+    "theta": 7.0,
+    "l_s": 10,
+    "rho": 0.8,
+    "s_max": 1.1,
+    "sigma": 6.0,
+    "canvas": 800,
+    "tga_shrink_frac": 0.125,
+    "tga_expand_frac": 0.25,
+    "tga_temperature": 1.0,
+    "tga_last_stage_only": false,
+    "tga_objective": "geom",
+    "tga_geom_lambda": 1.0,
+    "tag": "tga_geom_norrb"
+  },
+  "results": {
+    "n_images_used": 20,
+    "n_crafted": 20,
+    "n_skipped": 1,
+    "craft_elapsed_sec": 413.4,
+    "eval_elapsed_sec": 16.9,
+    "rows": [
+      {
+        "attack": "clean",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": null,
+        "mAP_adv": 0.4341797470042424,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.5902427905911495,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_geom_norrb",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": 0.4341797470042424,
+        "mAP_adv": 0.1831734935802359,
+        "mAP_drop_pct": 57.81159880346835,
+        "AP50_clean": 0.5902427905911495,
+        "AP50_adv": 0.28536641197568335,
+        "ASR": 56.38297872340426
+      },
+      {
+        "attack": "clean",
+        "model_name": "dino_r50",
+        "group": "D",
+        "mAP_clean": null,
+        "mAP_adv": 0.5834360020979529,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.7257455009881744,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_geom_norrb",
+        "model_name": "dino_r50",
+        "group": "D",
+        "mAP_clean": 0.5834360020979529,
+        "mAP_adv": 0.3534413098153259,
+        "mAP_drop_pct": 39.42072334507963,
+        "AP50_clean": 0.7257455009881744,
+        "AP50_adv": 0.5198302114478239,
+        "ASR": 44.680851063829785
+      },
+      {
+        "attack": "clean",
+        "model_name": "mask_rcnn_r50",
+        "group": "D",
+        "mAP_clean": null,
+        "mAP_adv": 0.4642958169106916,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6240006101671828,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_geom_norrb",
+        "model_name": "mask_rcnn_r50",
+        "group": "D",
+        "mAP_clean": 0.4642958169106916,
+        "mAP_adv": 0.2007062585816586,
+        "mAP_drop_pct": 56.771900311937344,
+        "AP50_clean": 0.6240006101671828,
+        "AP50_adv": 0.35824996425341804,
+        "ASR": 43.956043956043956
+      },
+      {
+        "attack": "clean",
+        "model_name": "yolox_l",
+        "group": "B",
+        "mAP_clean": null,
+        "mAP_adv": 0.568465569599821,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6829794877475962,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_geom_norrb",
+        "model_name": "yolox_l",
+        "group": "B",
+        "mAP_clean": 0.568465569599821,
+        "mAP_adv": 0.5340497399150687,
+        "mAP_drop_pct": 6.05416256062435,
+        "AP50_clean": 0.6829794877475962,
+        "AP50_adv": 0.6557861269643553,
+        "ASR": 3.9603960396039604
+      },
+      {
+        "attack": "clean",
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "mAP_clean": null,
+        "mAP_adv": 0.46980952181686286,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6177454743843891,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_geom_norrb",
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "mAP_clean": 0.46980952181686286,
+        "mAP_adv": 0.4707962054275949,
+        "mAP_drop_pct": -0.21001779762068867,
+        "AP50_clean": 0.6177454743843891,
+        "AP50_adv": 0.6399915713419307,
+        "ASR": 6.185567010309279
+      },
+      {
+        "attack": "clean",
+        "model_name": "dino_swin_l",
+        "group": "C",
+        "mAP_clean": null,
+        "mAP_adv": 0.6491756109114478,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.7881128286314726,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_geom_norrb",
+        "model_name": "dino_swin_l",
+        "group": "C",
+        "mAP_clean": 0.6491756109114478,
+        "mAP_adv": 0.6147441943294328,
+        "mAP_drop_pct": 5.3038678599883005,
+        "AP50_clean": 0.7881128286314726,
+        "AP50_adv": 0.7478118929337058,
+        "ASR": 4.0
+      }
+    ]
+  }
+}

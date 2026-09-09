@@ -1,0 +1,170 @@
+{
+  "timestamp": "20260909T130428Z",
+  "attack": "tga_v0_tga_lastonly_norrb",
+  "manifest": "data/manifests/dev_50.json",
+  "seed": 42,
+  "n_images": 20,
+  "score_thr": 0.3,
+  "iou_thr": 0.5,
+  "config": {
+    "attack_type": "tga",
+    "epsilon": 5.0,
+    "alpha": 1.0,
+    "steps": 100,
+    "mu": 1.0,
+    "k": 3.0,
+    "use_rrb": false,
+    "theta": 7.0,
+    "l_s": 10,
+    "rho": 0.8,
+    "s_max": 1.1,
+    "sigma": 6.0,
+    "canvas": 800,
+    "tga_shrink_frac": 0.125,
+    "tga_expand_frac": 0.25,
+    "tga_temperature": 1.0,
+    "tga_last_stage_only": true,
+    "tag": "tga_lastonly_norrb"
+  },
+  "results": {
+    "n_images_used": 20,
+    "n_crafted": 20,
+    "n_skipped": 1,
+    "craft_elapsed_sec": 100.2,
+    "eval_elapsed_sec": 17.0,
+    "rows": [
+      {
+        "attack": "clean",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": null,
+        "mAP_adv": 0.4341797470042424,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.5902427905911495,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_lastonly_norrb",
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "mAP_clean": 0.4341797470042424,
+        "mAP_adv": 0.08282328593416095,
+        "mAP_drop_pct": 80.92419406809601,
+        "AP50_clean": 0.5902427905911495,
+        "AP50_adv": 0.11619162922062409,
+        "ASR": 73.40425531914893
+      },
+      {
+        "attack": "clean",
+        "model_name": "dino_r50",
+        "group": "D",
+        "mAP_clean": null,
+        "mAP_adv": 0.5834360020979529,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.7257455009881744,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_lastonly_norrb",
+        "model_name": "dino_r50",
+        "group": "D",
+        "mAP_clean": 0.5834360020979529,
+        "mAP_adv": 0.16652196474332473,
+        "mAP_drop_pct": 71.4584008966647,
+        "AP50_clean": 0.7257455009881744,
+        "AP50_adv": 0.25662110224684975,
+        "ASR": 61.702127659574465
+      },
+      {
+        "attack": "clean",
+        "model_name": "mask_rcnn_r50",
+        "group": "D",
+        "mAP_clean": null,
+        "mAP_adv": 0.4642958169106916,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6240006101671828,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_lastonly_norrb",
+        "model_name": "mask_rcnn_r50",
+        "group": "D",
+        "mAP_clean": 0.4642958169106916,
+        "mAP_adv": 0.09900314505268139,
+        "mAP_drop_pct": 78.67670966509594,
+        "AP50_clean": 0.6240006101671828,
+        "AP50_adv": 0.16539614218392545,
+        "ASR": 65.93406593406593
+      },
+      {
+        "attack": "clean",
+        "model_name": "yolox_l",
+        "group": "B",
+        "mAP_clean": null,
+        "mAP_adv": 0.568465569599821,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6829794877475962,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_lastonly_norrb",
+        "model_name": "yolox_l",
+        "group": "B",
+        "mAP_clean": 0.568465569599821,
+        "mAP_adv": 0.5266256144009743,
+        "mAP_drop_pct": 7.360156434504987,
+        "AP50_clean": 0.6829794877475962,
+        "AP50_adv": 0.674749293746751,
+        "ASR": 5.9405940594059405
+      },
+      {
+        "attack": "clean",
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "mAP_clean": null,
+        "mAP_adv": 0.46980952181686286,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.6177454743843891,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_lastonly_norrb",
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "mAP_clean": 0.46980952181686286,
+        "mAP_adv": 0.4654325943088303,
+        "mAP_drop_pct": 0.9316387396973005,
+        "AP50_clean": 0.6177454743843891,
+        "AP50_adv": 0.6538038873660462,
+        "ASR": 8.24742268041237
+      },
+      {
+        "attack": "clean",
+        "model_name": "dino_swin_l",
+        "group": "C",
+        "mAP_clean": null,
+        "mAP_adv": 0.6491756109114478,
+        "mAP_drop_pct": null,
+        "AP50_clean": null,
+        "AP50_adv": 0.7881128286314726,
+        "ASR": ""
+      },
+      {
+        "attack": "tga_v0_tga_lastonly_norrb",
+        "model_name": "dino_swin_l",
+        "group": "C",
+        "mAP_clean": 0.6491756109114478,
+        "mAP_adv": 0.6116897457670907,
+        "mAP_drop_pct": 5.774379769401177,
+        "AP50_clean": 0.7881128286314726,
+        "AP50_adv": 0.7415819021168012,
+        "ASR": 3.0
+      }
+    ]
+  }
+}
