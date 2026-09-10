@@ -1,0 +1,76 @@
+{
+  "timestamp": "20260910T153253Z",
+  "manifest": "data/manifests/dev_50.json",
+  "seed": 42,
+  "n_images": 2,
+  "steps": 5,
+  "models": [
+    "faster_rcnn_r50",
+    "mask_rcnn_swin_t"
+  ],
+  "results": {
+    "n_images_used": 2,
+    "n_crafted": 2,
+    "n_skipped": 0,
+    "craft_elapsed_sec": 3.6,
+    "comparison": [
+      {
+        "model_name": "faster_rcnn_r50",
+        "group": "",
+        "Q_clean": 0.4938838878249038,
+        "Qlast_clean": 0.45545203478793317,
+        "ASR_osfd_rrb": 50.0,
+        "Q_osfd_rrb": 0.5478983986144033,
+        "Qlast_osfd_rrb": 0.5424324244551193,
+        "ASR_osfd_norrb": 100.0,
+        "Q_osfd_norrb": 0.6436837897652025,
+        "Qlast_osfd_norrb": 0.8385882463118994,
+        "ASR_mi_fgsm": 50.0,
+        "Q_mi_fgsm": 0.5577788402269737,
+        "Qlast_mi_fgsm": 0.5983647093308526,
+        "ASR_path_m3": 50.0,
+        "Q_path_m3": 0.5476977004587102,
+        "Qlast_path_m3": 0.539486658632085,
+        "delta_Q_RRB": -0.0957853911507992,
+        "delta_ASR_RRB": -50.0,
+        "RRB_sign_match": true,
+        "delta_Q_path": -0.0002006981556930132,
+        "delta_ASR_path": 0.0,
+        "path_sign_match": false
+      },
+      {
+        "model_name": "mask_rcnn_swin_t",
+        "group": "C",
+        "Q_clean": 0.43115395280273844,
+        "Qlast_clean": 0.3117733490033909,
+        "ASR_osfd_rrb": 16.666666666666668,
+        "Q_osfd_rrb": 0.47685147464461236,
+        "Qlast_osfd_rrb": 0.3440855173230002,
+        "ASR_osfd_norrb": 16.666666666666668,
+        "Q_osfd_norrb": 0.4748581840302827,
+        "Qlast_osfd_norrb": 0.3334481561772507,
+        "ASR_mi_fgsm": 33.333333333333336,
+        "Q_mi_fgsm": 0.47059387844139666,
+        "Qlast_mi_fgsm": 0.3332115177175813,
+        "ASR_path_m3": 16.666666666666668,
+        "Q_path_m3": 0.4766451837976579,
+        "Qlast_path_m3": 0.3439889704762601,
+        "delta_Q_RRB": 0.001993290614329679,
+        "delta_ASR_RRB": 0.0,
+        "RRB_sign_match": false,
+        "delta_Q_path": -0.00020629084695444888,
+        "delta_ASR_path": 0.0,
+        "path_sign_match": false
+      }
+    ],
+    "verdict": {
+      "rrb_matches": {
+        "mask_rcnn_swin_t": false
+      },
+      "rrb_go": false,
+      "path_dino_match": null,
+      "path_mask_match": false,
+      "strong_go": false
+    }
+  }
+}

@@ -2566,3 +2566,102 @@ theo (chưa làm, cần bàn với user khi bắt đầu phiên sau)**: quay l�
 câu hỏi khác — "cái gì tạo ra transferable adversarial gradient/direction" thay vì "cái gì được nhiều
 architecture cùng biểu diễn/cùng bất biến" — hai câu hỏi đã được chứng minh là KHÔNG tương đương qua
 chuỗi §29-31.
+
+**[SUPERSEDED bởi §32]** Đoạn "Bước tiếp theo" ở trên là snapshot ngay sau khi BTFA đóng — user sau đó đề xuất
+1 candidate mới không dựa trên E10 (CEFA, dựa trên transformation-equivariance thay vì relational geometry),
+test bằng E11 trước khi build; E11 cũng NO-GO, xem §32 cho hướng đi thực tế tiếp theo.
+
+## 32. E11 — Adversarial Equivariance Gap: existence/relevance test cho CEFA, NO-GO — đóng trước khi build attack
+
+Sau khi TGA→DBTA→BTFA đóng hẳn dòng method-derivation từ E10 (§29-31, kết luận "architecture-shared
+diagnostic structure ⇏ architecture-shared adversarial direction"), user đề xuất một attack principle hoàn
+toàn khác, không dựa trên E10's relational invariant: **CEFA (Cross-view Equivariance Failure Attack)** —
+thay vì tấn công giá trị/quan hệ feature, tấn công trực tiếp **transformation equivariance** của toàn bộ
+feature field. Ý tưởng: một detector backbone tốt phải thỏa `F(τx) ≈ W_τF(x)` với τ là 1 phép biến đổi hình
+học nhẹ (rotate/scale); adversarial perturbation thành công có thể là perturbation phá vỡ chính
+"transformation law" này — property mà nhiều architecture (CNN/Transformer) đều buộc phải tuân theo để giữ
+spatial correspondence cho detection, mạnh hơn requirement thuần semantic của classifier.
+
+Motivation nối từ 2 finding cũ của project: RRB (driver transfer mạnh nhất, +13→+31 ASR, E3 §8) và
+path-M3/N6-B (path-averaged gradient cải thiện DINO-Swin, 33.0%→39.1% ASR ở `dev_300`, §16-22) đều là can
+thiệp KHÔNG tấn công trực tiếp 1 feature value cụ thể — cả hai đều "nhìn" adversarial image qua nhiều
+góc/nhiều điểm trên trajectory. Hypothesis: cả hai có thể đang (vô tình) làm tăng equivariance failure.
+
+**Thiết kế E11 (existence + relevance test, KHÔNG craft loss mới — dùng nguyên crafting code hiện có)**:
+- `Q_m(x,δ) = E_τ [ ||F_m(τ(x+δ)) − W_τF_m(x+δ)|| / ||F_m(x+δ)|| ]`, τ ∈ {rotate±5°, scale0.9/1.1}
+  (pre-registered, không sweep).
+- `W_τ` định nghĩa qua `F.affine_grid`+`grid_sample` trong tọa độ chuẩn hóa [-1,1] — cùng MỘT hàm `warp()`
+  (`transfer_attack/equivariance.py`) áp trực tiếp lên cả pixel-space image (định nghĩa τ(x)) và feature-map
+  tensor (định nghĩa W_τF(x)), nên nhất quán hình học đúng theo construction (resolution-agnostic), không cần
+  derive/verify point-transform riêng như DBTA's `rotate_points` đã phải làm cho RRB.
+- 4 arm: `osfd_rrb` (=`osfd_local`), `osfd_norrb`, `path_m3` (M=3, N6-B, RNG-paired với `osfd_rrb` qua
+  `craft_paired_local_path`, tái dùng nguyên từ `scripts/n6b_path_pilot.py`), `mi_fgsm` (context, không dùng
+  trong verdict). Craft mới N=20/100 step trên `dev_50` (checkout này `results/` trống — script mới
+  `scripts/e11_equivariance_gap.py`).
+- GO criteria (pre-registered, chốt trước khi chạy):
+  - RRB test: `sign(ΔQ_RRB) == sign(ΔASR_RRB)` trên **3/3** hard target (`yolox_l`, `mask_rcnn_swin_t`,
+    `dino_swin_l`).
+  - Path test: cùng dấu trên `dino_swin_l` (chính); `mask_rcnn_swin_t` cùng dấu là bonus, không bắt buộc.
+  - Strong GO nếu cả 2 test pass → mới thiết kế CEFA. NO-GO nếu 1 trong 2 fail — không đổi transform
+    set/reweight stage để cứu.
+
+**Kết quả (N=20, 100 step, `dev_50`, 6 model, `results/e11_equivariance_gap_summary.csv`, run log
+`runs/e11_equivariance_gap_dev_50_n20_20260910T154634Z.json`)**:
+
+| model | group | ASR norrb→rrb (Δ) | ASR rrb→path (Δ) | Q norrb→rrb (ΔQ) | Q rrb→path (ΔQ) | RRB sign match | path sign match |
+|---|---|---:|---:|---:|---:|---|---|
+| faster_rcnn_r50 (WB) | – | 100.0→100.0 (0.0) | →98.9 (−1.1) | 0.603→0.512 (−0.092) | →0.521 (+0.009) | – | – |
+| yolox_l | B | 32.7→80.2 (+47.5) | →84.2 (+4.0) | 0.639→0.575 (−0.065) | →0.581 (+0.006) | ❌ | ✅ |
+| dino_swin_l | C | 9.0→34.0 (+25.0) | →43.0 (+9.0) | 0.560→0.584 (+0.025) | →0.585 (+0.0006) | ✅ | ✅ |
+| mask_rcnn_swin_t | C | 21.6→82.5 (+60.8) | →82.5 (0.0) | 0.487→0.499 (+0.012) | →0.496 (−0.004) | ✅ | ❌ (ASR tie) |
+| dino_r50 | D | 100→98.9 | →98.9 | 0.695→0.572 (−0.124) | →0.582 | – | – |
+| mask_rcnn_r50 | D | 100→97.8 | →98.9 | 0.616→0.526 (−0.090) | →0.533 | – | – |
+
+**RRB test: 2/3 (`yolox_l` FAIL, `mask_rcnn_swin_t`/`dino_swin_l` PASS) — cần 3/3 → FAIL.** **Path test: PASS
+trên `dino_swin_l`** (cùng dấu) nhưng biên độ ΔQ chỉ +0.0006 — nhỏ hơn ~40-50 lần biên độ ΔQ_RRB (0.01–0.12),
+nhiều khả năng nằm trong nhiễu N=20; `mask_rcnn_swin_t` không match nhưng do ASR tie tuyệt đối (82.47=82.47)
+ở N nhỏ này — suy biến, không phải bằng chứng phản bác mạnh theo hướng ngược lại.
+
+**Falsifier sạch nhất: `yolox_l`.** RRB tăng ASR +47.5 điểm (một trong những gain lớn nhất từng đo trong
+project cho riêng 1 can thiệp) nhưng Q **giảm** (−0.065) — đúng kịch bản NO-GO đã pre-register ("RRB tăng ASR
+rất lớn nhưng equivariance gap không đổi hoặc giảm"). Pattern rộng hơn: RRB chỉ tăng Q trên 2 target **Swin**
+(khớp hướng ASR), nhưng giảm Q trên toàn bộ nhóm **R50** (kể cả white-box, đã gần ceiling — nhất quán với
+hiện tượng saturation quen thuộc từ E10 §28's Table C) **và** trên `yolox_l` (CSP/Darknet, nhóm B) — tức
+hypothesis chỉ đứng vững cho đúng backbone Swin, không generalize sang "hard target nói chung" như tiêu chí
+RRB test đòi hỏi.
+
+**Kết luận (theo đúng quyết định user, đóng ngay không rescue)**:
+
+> E11 rejects feature-equivariance failure as a general transfer mechanism. RRB-induced transfer gains are
+> not consistently accompanied by increased equivariance error across heterogeneous backbones; the strongest
+> counterexample is YOLOX-L, where ASR rises sharply while equivariance error decreases. The effect appears
+> architecture-dependent, with positive alignment mainly on Swin targets, so CEFA is closed and will not be
+> pursued as a general transferable attack principle.
+
+**Bài học (đáng nhớ hơn cả kết quả NO-GO, nối tiếp bài học của §31)**:
+
+> RRB success is not explained by one universal representation property.
+
+Sau cả E10 (§27-28, relational invariant) và E11 (equivariance-failure invariant), pattern lặp lại rõ: một
+diagnostic property/invariant nhìn rất thuyết phục (tồn tại thật, đo được, đôi khi khớp dấu ASR trên VÀI
+model) thường KHÔNG generalize thành một transferable objective/mechanism DUY NHẤT giải thích transfer trên
+**toàn bộ** tập hard target heterogeneous (CNN non-ResNet + 2 họ Swin khác nhau). Cả E10's TGA/DBTA/BTFA
+(attack trực tiếp 1 structural invariant) và E11's CEFA (attack trực tiếp 1 transformation-law invariant) đều
+fail vì cùng lý do gốc: shared DIAGNOSTIC property ⇏ shared ADVERSARIAL mechanism — nhưng E11 thêm một lát
+cắt mới: ngay cả khi không attack trực tiếp property đó (E11 chỉ ĐO xem 2 intervention đã biết có đi cùng
+chiều với nó hay không, không craft loss mới), correlation giữa "known transfer driver" và "candidate
+universal property" cũng đã gãy ngay ở bước đo tương quan, trước khi kịp thử craft attack.
+
+**Việc KHÔNG làm (quyết định rõ, tránh redo)**: không đổi transform set (thêm góc/scale khác), không
+reweight theo stage, không tăng N để cố gắng "cứu" `yolox_l`'s falsification (biên độ mismatch của nó, −0.065
+ngược chiều +47.5 ASR, đủ rõ để không phải vấn đề thiếu power) — theo đúng kỷ luật no-rescue đã áp dụng
+xuyên suốt project (MVC §9, RCG §9, N2-B §12, DOB §15, E9 §26, TGA/DBTA/BTFA §29-31).
+
+**Trạng thái cuối**: **CEFA đóng ngay ở bước existence/relevance test, không build attack.** E10 (§27-28) và
+E11 (§32) cùng khẳng định: 2 "universal cross-architecture invariant" khác nhau (relational-geometry và
+transformation-equivariance) đều tồn tại thật ở mức diagnostic nhưng đều KHÔNG giải thích được RRB's transfer
+gain một cách nhất quán trên toàn bộ hard-target set. **Bước tiếp theo (chưa làm, cần bàn với user khi bắt
+đầu phiên sau)**: đổi hẳn góc tìm kiếm — thay vì tiếp tục tìm 1 scalar/property của REPRESENTATION giải
+thích transfer, chuyển sang tìm cấu trúc của chính PERTURBATION/UPDATE RULE mà nhiều hard target cùng "chấp
+nhận" (structure of the perturbation itself, not a property of what it disrupts) — hướng này chưa được đặc
+tả cụ thể, cần thiết kế cùng user trước khi code.

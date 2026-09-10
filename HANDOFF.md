@@ -2,18 +2,47 @@
 
 Mục đích: cho phiên Claude tiếp theo đọc nhanh để tiếp tục đúng ngữ cảnh sau khi máy restart,
 không cần đọc lại toàn bộ `RESEARCH.md` từ đầu. `RESEARCH.md` vẫn là nguồn sự thật đầy đủ cho
-mọi kết quả nghiên cứu (đặc biệt §29-31 cho phiên này) — file này chỉ tóm tắt điều hướng +
+mọi kết quả nghiên cứu (đặc biệt §29-32 cho phiên này) — file này chỉ tóm tắt điều hướng +
 engineering context không nằm trong journal.
 
-**Cập nhật lần cuối**: 2026-09-09 (muộn nhất, sau cả DBTA). **Dòng method-derivation từ E10 ĐÃ ĐÓNG
-HẲN** (TGA §29 → DBTA §30 → BTFA §31) — KHÔNG mở lại dòng này trong phiên sau mà không có lý do mới
-hẳn (không phải retune/mở rộng biến thể, project đã cấm rõ). Candidate cuối, **BTFA (Boundary
-Transition Field Attack, §31)**: thay dense point-sampling của DBTA bằng 1 continuous field (signed-
-distance function quanh mỗi GT box + directional derivative của feature map dọc normal của field) —
-đạt **white-box 96.8%** (tốt nhất trong 3 candidate, gần sát OSFD's 100%, xác nhận optimization không
-còn là bottleneck) nhưng **vẫn NO-GO so với OSFD trên hard target** (delta −7.2 đến +1.0, 0/3 đạt
-ngưỡng +5) dù thắng DBTA trên 2/3 hard target (đặc biệt `mask_rcnn_swin_t` +3.1, đúng điểm yếu nhất
-của DBTA). User xác nhận đóng hẳn cả dòng.
+**Cập nhật lần cuối**: 2026-09-10. **CẢ 2 dòng derive-attack-từ-1-universal-representation-property
+ĐÃ ĐÓNG HẲN**: (1) E10's relational-geometry invariant → TGA §29 → DBTA §30 → BTFA §31 (đóng phiên
+trước); (2) **MỚI phiên này**: transformation-equivariance invariant → **CEFA, test bằng E11
+(§32), NO-GO ngay ở bước existence/relevance, không build attack**. KHÔNG mở lại 1 trong 2 dòng này
+mà không có lý do mới hẳn.
+
+**E11 — Adversarial Equivariance Gap (§32), NO-GO.** User đề xuất CEFA (Cross-view Equivariance
+Failure Attack): thay vì attack feature value/relation, attack trực tiếp việc backbone feature field
+vi phạm transformation-equivariance (`F(τx) ≈ W_τF(x)` với τ = rotate/scale nhẹ). Trước khi build,
+test rẻ: RRB và path-M3 (2 known transfer driver) có làm TĂNG equivariance-gap `Q` đúng trên hard
+target mà chúng tăng ASR hay không? Script mới `scripts/e11_equivariance_gap.py` +
+`transfer_attack/equivariance.py` (hàm `warp()` dùng `affine_grid`/`grid_sample` chuẩn hóa
+[-1,1] — resolution-agnostic, cùng 1 hàm định nghĩa cả τ(x) pixel-space lẫn W_τF(x) feature-space,
+KHÔNG cần point-tracking riêng như DBTA's `rotate_points`). Kết quả N=20/100-step `dev_50`: RRB test
+chỉ 2/3 hard target khớp dấu (cần 3/3) — **`yolox_l` là falsifier sạch**: RRB tăng ASR +47.5 nhưng Q
+**giảm** −0.065 (đúng NO-GO case đã pre-register). Path test pass trên `dino_swin_l` nhưng biên độ
+ΔQ=+0.0006, ~40-50x nhỏ hơn biên độ ΔQ_RRB — yếu, không đủ cứu RRB test đã fail. User xác nhận đóng
+CEFA ngay, không sweep transform set/tăng N để rescue. Bài học ghi lại: "RRB success is not
+explained by one universal representation property" — cả E10 (relational geometry) và E11
+(transformation equivariance) đều là diagnostic invariant thật nhưng không generalize thành
+transferable mechanism, cùng 1 pattern thất bại gốc như TGA/DBTA/BTFA.
+
+**Việc CHƯA làm, cần user quay lại quyết định** (đổi hẳn góc tìm kiếm so với mọi hướng đã thử E10-E11):
+KHÔNG tiếp tục tìm 1 scalar/property của REPRESENTATION để giải thích transfer (2 lần đã thử, 2 lần
+NO-GO) — chuyển sang tìm cấu trúc của chính PERTURBATION/UPDATE RULE mà nhiều hard target cùng "chấp
+nhận" (structure of the perturbation itself, không phải property của thứ nó phá vỡ). Hướng này CHƯA
+được đặc tả cụ thể — cần thiết kế cùng user trước khi code, giống mọi quyết định phương pháp lớn khác
+trong project.
+
+---
+
+**Cập nhật trước đó (2026-09-09, dòng E10-derived đã đóng ở BTFA)**. Candidate cuối của dòng đó,
+**BTFA (Boundary Transition Field Attack, §31)**: thay dense point-sampling của DBTA bằng 1 continuous
+field (signed-distance function quanh mỗi GT box + directional derivative của feature map dọc normal
+của field) — đạt **white-box 96.8%** (tốt nhất trong 3 candidate, gần sát OSFD's 100%, xác nhận
+optimization không còn là bottleneck) nhưng **vẫn NO-GO so với OSFD trên hard target** (delta −7.2
+đến +1.0, 0/3 đạt ngưỡng +5) dù thắng DBTA trên 2/3 hard target (đặc biệt `mask_rcnn_swin_t` +3.1,
+đúng điểm yếu nhất của DBTA). User xác nhận đóng hẳn cả dòng.
 
 **Kết luận quan trọng nhất của cả chuỗi §29-31 (đọc kỹ trước khi nghĩ tới hướng mới liên quan E10)**:
 > Architecture-shared DIAGNOSTIC structure ⇏ architecture-shared ADVERSARIAL DIRECTION. E10's
@@ -51,6 +80,11 @@ tái dùng cho bất kỳ method tương lai nào cần point-tracking qua RRB),
 attack.py` thêm `attack_type="dbta"`/`"btfa"` (`AttackConfig` có đủ params, xem code), `scripts/
 dbta_v0_pilot.py` + `scripts/btfa_v0_pilot.py` (pilot script pattern: N/steps configurable, mỗi
 variant so đúng baseline, `predictions_dir` timestamp riêng mỗi lần chạy — xem bug #2 dưới).
+
+**[SUPERSEDED bởi §32/E11, xem đầu file]** Đoạn "Việc CHƯA làm" dưới đây là snapshot ngay sau BTFA —
+user sau đó đã chọn 1 candidate cụ thể từ đây (CEFA, dựa trên transformation-equivariance), test bằng
+E11, và cũng NO-GO. Xem đầu file cho "Việc CHƯA làm" hiện hành (đổi hẳn sang structure-of-perturbation
+thay vì representation-property).
 
 **Việc CHƯA làm, cần user quay lại quyết định** (KHÔNG tự chọn mà không hỏi — quyết định thiết kế
 lớn giống quyết định bắt đầu TGA/DBTA/BTFA, và dòng E10-derived đã đóng nên đây PHẢI là hướng MỚI,
